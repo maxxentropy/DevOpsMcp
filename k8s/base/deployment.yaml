@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devops-mcp
+  namespace: devops-mcp
+  labels:
+    app.kubernetes.io/name: devops-mcp
+    app.kubernetes.io/component: server
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: devops-mcp
+      app.kubernetes.io/component: server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: devops-mcp
+        app.kubernetes.io/component: server
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "8080"
+    spec:
+      serviceAccountName: devops-mcp
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: devops-mcp
+        image: devops-mcp:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        env:
+        - name: ASPNETCORE_ENVIRONMENT
+          value: "Production"
+        - name: MCP__Protocol
+          value: "sse"
+        - name: AzureDevOps__OrganizationUrl
+          valueFrom:
+            secretKeyRef:
+              name: devops-mcp-secrets
+              key: azure-devops-org-url
+        - name: AzureDevOps__PersonalAccessToken
+          valueFrom:
+            secretKeyRef:
+              name: devops-mcp-secrets
+              key: azure-devops-pat
+        - name: Redis__ConnectionString
+          valueFrom:
+            secretKeyRef:
+              name: devops-mcp-secrets
+              key: redis-connection-string
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: temp
+          mountPath: /tmp
+        - name: logs
+          mountPath: /app/logs
+      volumes:
+      - name: temp
+        emptyDir: {}
+      - name: logs
+        emptyDir: {}

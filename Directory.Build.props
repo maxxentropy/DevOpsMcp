@@ -1,0 +1,35 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <WarningsAsErrors />
+    <NoWarn>CS1591;CA1056;CA1054;CA1032;CA1062;CA1707;CA1848;CA2007;CA1724;CA1002;CA1859;CA1812;CA1820;CA1305;CA1727;CA1308;CA1031;CA1019;CA1303;CA1052;CA2201;CA1001;CA1860;CA1861;CA1822</NoWarn>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <AnalysisLevel>latest-all</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Authors>DevOps MCP Team</Authors>
+    <Company>DevOps MCP</Company>
+    <Product>DevOps MCP Server</Product>
+    <Copyright>Copyright © DevOps MCP Team 2025</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/devops-mcp/devops-mcp</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+    <PackageReference Include="MinVer" Version="4.3.0" PrivateAssets="All" />
+  </ItemGroup>
+
+  <PropertyGroup Condition="'$(CI)' == 'true'">
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <Deterministic>true</Deterministic>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+  </PropertyGroup>
+</Project>
