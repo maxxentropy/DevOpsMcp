@@ -39,6 +39,9 @@ try
     builder.Services.AddInfrastructure(builder.Configuration);
     builder.Services.AddMcpServer();
     
+    // Add persona services
+    builder.Services.AddPersonaServices();
+    
     // Add OpenTelemetry
     builder.Services.AddOpenTelemetry()
         .ConfigureResource(resource => resource

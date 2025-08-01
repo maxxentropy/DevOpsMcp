@@ -1,5 +1,9 @@
+using System;
+using System.IO;
+using DevOpsMcp.Application.Personas.Memory;
 using DevOpsMcp.Infrastructure.Authentication;
 using DevOpsMcp.Infrastructure.Configuration;
+using DevOpsMcp.Infrastructure.Personas.Memory;
 using DevOpsMcp.Infrastructure.Repositories;
 using DevOpsMcp.Infrastructure.Services;
 
@@ -28,6 +32,18 @@ public static class DependencyInjection
         services.AddScoped<IBuildRepository, BuildRepository>();
         services.AddScoped<IRepositoryService, RepositoryService>();
         services.AddScoped<IPullRequestService, PullRequestService>();
+        
+        // Persona Infrastructure
+        services.AddSingleton<IPersonaMemoryStore, FileBasedPersonaMemoryStore>();
+        services.Configure<PersonaMemoryStoreOptions>(options =>
+        {
+            options.BasePath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "DevOpsMcp",
+                "PersonaMemory"
+            );
+            options.MaxContextsPerPersona = 100;
+        });
         
         return services;
     }
