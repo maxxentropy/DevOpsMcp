@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+
 namespace DevOpsMcp.Contracts.WorkItems;
 
 public sealed record WorkItemDto

@@ -2,30 +2,27 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0-alpine AS build
 WORKDIR /src
 
-# Copy solution and project files
-COPY DevOpsMcp.sln ./
+# Copy only the project files (not solution file to avoid test references)
 COPY src/DevOpsMcp.Domain/DevOpsMcp.Domain.csproj src/DevOpsMcp.Domain/
 COPY src/DevOpsMcp.Application/DevOpsMcp.Application.csproj src/DevOpsMcp.Application/
 COPY src/DevOpsMcp.Infrastructure/DevOpsMcp.Infrastructure.csproj src/DevOpsMcp.Infrastructure/
 COPY src/DevOpsMcp.Contracts/DevOpsMcp.Contracts.csproj src/DevOpsMcp.Contracts/
 COPY src/DevOpsMcp.Server/DevOpsMcp.Server.csproj src/DevOpsMcp.Server/
 
-# Restore dependencies
+# Restore dependencies for the server project
+WORKDIR /src/src/DevOpsMcp.Server
 RUN dotnet restore
 
 # Copy source code
+WORKDIR /src
 COPY src/ src/
 
 # Build and publish
 WORKDIR /src/src/DevOpsMcp.Server
-RUN dotnet publish -c Release -o /app/publish \
-    --no-restore \
-    -p:PublishAot=true \
-    -p:PublishTrimmed=true \
-    -p:TrimMode=partial
+RUN dotnet publish -c Release -o /app/publish
 
 # Runtime stage
-FROM mcr.microsoft.com/dotnet/runtime-deps:8.0-alpine AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine AS runtime
 WORKDIR /app
 
 # Install required packages

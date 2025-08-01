@@ -1,3 +1,5 @@
+using System;
+using System.IO;
 using DevOpsMcp.Application.Personas;
 using DevOpsMcp.Application.Personas.Adaptation;
 using DevOpsMcp.Application.Personas.Memory;

@@ -1,3 +1,5 @@
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using DevOpsMcp.Server.Mcp;
 using DevOpsMcp.Server.Protocols;
 using DevOpsMcp.Server.Tools;

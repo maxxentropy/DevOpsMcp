@@ -1,3 +1,8 @@
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -6,6 +11,8 @@ using Serilog;
 using DevOpsMcp.Server;
 using DevOpsMcp.Server.Protocols;
 using DevOpsMcp.Server.Mcp;
+using DevOpsMcp.Application;
+using DevOpsMcp.Infrastructure;
 
 // Configure Serilog
 Log.Logger = new LoggerConfiguration()
@@ -68,8 +75,7 @@ try
     
     app.MapPost("/rpc", async (HttpContext context, SseProtocolHandler handler) =>
     {
-        var jsonContext = new McpJsonSerializerContext();
-        var request = await context.Request.ReadFromJsonAsync(jsonContext.McpRequest);
+        var request = await context.Request.ReadFromJsonAsync<McpRequest>();
         if (request == null)
         {
             return Results.BadRequest("Invalid request");
@@ -78,7 +84,7 @@ try
     });
     
     // Start protocol handlers based on configuration
-    var protocolMode = builder.Configuration["MCP:Protocol"] ?? "stdio";
+    var protocolMode = app.Configuration["MCP:Protocol"] ?? "stdio";
     
     if (protocolMode == "stdio")
     {

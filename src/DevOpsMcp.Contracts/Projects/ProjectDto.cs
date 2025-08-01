@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+
 namespace DevOpsMcp.Contracts.Projects;
 
 public sealed record ProjectDto
