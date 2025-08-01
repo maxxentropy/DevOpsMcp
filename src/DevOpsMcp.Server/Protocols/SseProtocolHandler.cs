@@ -1,82 +1,70 @@
 using DevOpsMcp.Server.Mcp;
+using System.Text.Json;
+using Microsoft.AspNetCore.Http;
 
 namespace DevOpsMcp.Server.Protocols;
 
-public sealed class SseProtocolHandler : IProtocolHandler
+public sealed class SseProtocolHandler(
+    IMessageHandler messageHandler,
+    IConnectionManager connectionManager,
+    ILogger<SseProtocolHandler> logger)
+    : IProtocolHandler
 {
-    private readonly IMessageHandler _messageHandler;
-    private readonly IConnectionManager _connectionManager;
-    private readonly ILogger<SseProtocolHandler> _logger;
-    private readonly JsonSerializerOptions _jsonOptions;
+    private readonly McpJsonSerializerContext _jsonContext = new();
 
     public string Name => "sse";
 
-    public SseProtocolHandler(
-        IMessageHandler messageHandler,
-        IConnectionManager connectionManager,
-        ILogger<SseProtocolHandler> logger)
-    {
-        _messageHandler = messageHandler;
-        _connectionManager = connectionManager;
-        _logger = logger;
-        _jsonOptions = new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-        };
-    }
-
     public Task StartAsync(CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("SSE protocol handler started");
+        logger.LogInformation("SSE protocol handler started");
         return Task.CompletedTask;
     }
 
     public Task StopAsync(CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("SSE protocol handler stopped");
+        logger.LogInformation("SSE protocol handler stopped");
         return Task.CompletedTask;
     }
 
     public async Task HandleConnectionAsync(HttpContext context)
     {
         var connectionId = Guid.NewGuid().ToString();
-        _logger.LogInformation("New SSE connection: {ConnectionId}", connectionId);
+        logger.LogInformation("New SSE connection: {ConnectionId}", connectionId);
 
         context.Response.Headers.Append("Content-Type", "text/event-stream");
         context.Response.Headers.Append("Cache-Control", "no-cache");
         context.Response.Headers.Append("Connection", "keep-alive");
         context.Response.Headers.Append("X-Accel-Buffering", "no");
 
-        var sender = new SseMessageSender(context.Response, _jsonOptions, _logger);
-        await _connectionManager.AddConnectionAsync(connectionId, sender);
+        var sender = new SseMessageSender(context.Response, _jsonContext, logger);
+        await connectionManager.AddConnectionAsync(connectionId, sender);
 
         try
         {
             await context.Response.Body.FlushAsync();
             
             // Send initial ping
-            await sender.SendEventAsync("ping", new { timestamp = DateTimeOffset.UtcNow }, context.RequestAborted);
+            await sender.SendEventAsync("ping", new PingEvent { Timestamp = DateTimeOffset.UtcNow }, context.RequestAborted);
 
             // Keep connection alive
             while (!context.RequestAborted.IsCancellationRequested)
             {
                 await Task.Delay(TimeSpan.FromSeconds(30), context.RequestAborted);
-                await sender.SendEventAsync("ping", new { timestamp = DateTimeOffset.UtcNow }, context.RequestAborted);
+                await sender.SendEventAsync("ping", new PingEvent { Timestamp = DateTimeOffset.UtcNow }, context.RequestAborted);
             }
         }
         catch (OperationCanceledException)
         {
-            _logger.LogInformation("SSE connection {ConnectionId} cancelled", connectionId);
+            logger.LogInformation("SSE connection {ConnectionId} cancelled", connectionId);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in SSE connection {ConnectionId}", connectionId);
+            logger.LogError(ex, "Error in SSE connection {ConnectionId}", connectionId);
         }
         finally
         {
-            await _connectionManager.RemoveConnectionAsync(connectionId);
-            _logger.LogInformation("SSE connection {ConnectionId} closed", connectionId);
+            await connectionManager.RemoveConnectionAsync(connectionId);
+            logger.LogInformation("SSE connection {ConnectionId} closed", connectionId);
         }
     }
 
@@ -84,12 +72,13 @@ public sealed class SseProtocolHandler : IProtocolHandler
     {
         try
         {
-            var response = await _messageHandler.HandleRequestAsync(request, context.RequestAborted);
-            return Results.Json(response, _jsonOptions);
+            var response = await messageHandler.HandleRequestAsync(request, context.RequestAborted);
+            var json = JsonSerializer.Serialize(response, _jsonContext.McpResponse);
+            return Results.Content(json, "application/json");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error handling SSE request");
+            logger.LogError(ex, "Error handling SSE request");
             var errorResponse = new McpResponse
             {
                 Jsonrpc = "2.0",
@@ -101,24 +90,19 @@ public sealed class SseProtocolHandler : IProtocolHandler
                 },
                 Id = request.Id ?? null!
             };
-            return Results.Json(errorResponse, _jsonOptions);
+            var errorJson = JsonSerializer.Serialize(errorResponse, _jsonContext.McpResponse);
+            return Results.Content(errorJson, "application/json", statusCode: 500);
         }
     }
 }
 
-internal sealed class SseMessageSender : IMessageSender
+internal sealed class SseMessageSender(
+    HttpResponse response,
+    McpJsonSerializerContext jsonContext,
+    Microsoft.Extensions.Logging.ILogger logger)
+    : IMessageSender
 {
-    private readonly HttpResponse _response;
-    private readonly JsonSerializerOptions _jsonOptions;
-    private readonly Microsoft.Extensions.Logging.ILogger _logger;
     private readonly SemaphoreSlim _writeLock = new(1, 1);
-
-    public SseMessageSender(HttpResponse response, JsonSerializerOptions jsonOptions, Microsoft.Extensions.Logging.ILogger logger)
-    {
-        _response = response;
-        _jsonOptions = jsonOptions;
-        _logger = logger;
-    }
 
     public async Task SendResponseAsync(McpResponse response, CancellationToken cancellationToken = default)
     {
@@ -135,15 +119,24 @@ internal sealed class SseMessageSender : IMessageSender
         await _writeLock.WaitAsync(cancellationToken);
         try
         {
-            var json = JsonSerializer.Serialize(data, _jsonOptions);
+            string json;
+            if (data is McpResponse response1)
+                json = JsonSerializer.Serialize(response1, jsonContext.McpResponse);
+            else if (data is McpNotification notification)
+                json = JsonSerializer.Serialize(notification, jsonContext.McpNotification);
+            else if (data is PingEvent ping)
+                json = JsonSerializer.Serialize(ping, jsonContext.PingEvent);
+            else
+                json = JsonSerializer.Serialize(data, jsonContext.Object);
+                
             var message = $"event: {eventType}\ndata: {json}\n\n";
             
-            await _response.WriteAsync(message, cancellationToken);
-            await _response.Body.FlushAsync(cancellationToken);
+            await response.WriteAsync(message, cancellationToken);
+            await response.Body.FlushAsync(cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error sending SSE message");
+            logger.LogError(ex, "Error sending SSE message");
             throw;
         }
         finally

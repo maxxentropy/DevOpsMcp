@@ -3,27 +3,21 @@ using DevOpsMcp.Server.Tools;
 
 namespace DevOpsMcp.Server.Mcp;
 
-public sealed class MessageHandler : IMessageHandler
+public sealed class MessageHandler(
+    IToolRegistry toolRegistry,
+    ILogger<MessageHandler> logger)
+    : IMessageHandler
 {
-    private readonly IToolRegistry _toolRegistry;
-    private readonly ILogger<MessageHandler> _logger;
     private readonly ServerInfo _serverInfo = new()
     {
         Name = "DevOps MCP Server",
         Version = "1.0.0"
     };
-
-    public MessageHandler(
-        IToolRegistry toolRegistry,
-        ILogger<MessageHandler> logger)
-    {
-        _toolRegistry = toolRegistry;
-        _logger = logger;
-    }
+    private readonly McpJsonSerializerContext _jsonContext = new();
 
     public async Task<McpResponse> HandleRequestAsync(McpRequest request, CancellationToken cancellationToken = default)
     {
-        _logger.LogDebug("Handling request: {Method}", request.Method);
+        logger.LogDebug("Handling request: {Method}", request.Method);
 
         try
         {
@@ -50,14 +44,14 @@ public sealed class MessageHandler : IMessageHandler
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error handling request {Method}", request.Method);
+            logger.LogError(ex, "Error handling request {Method}", request.Method);
             return CreateErrorResponse(request.Id!, -32603, "Internal error", ex.Message);
         }
     }
 
     public Task HandleNotificationAsync(McpNotification notification, CancellationToken cancellationToken = default)
     {
-        _logger.LogDebug("Handling notification: {Method}", notification.Method);
+        logger.LogDebug("Handling notification: {Method}", notification.Method);
 
         return notification.Method switch
         {
@@ -69,10 +63,10 @@ public sealed class MessageHandler : IMessageHandler
 
     private Task<object> HandleInitializeAsync(McpRequest request)
     {
-        var initRequest = request.Params?.Deserialize<InitializeRequest>() 
+        var initRequest = request.Params?.Deserialize(_jsonContext.InitializeRequest) 
             ?? throw new ArgumentException("Invalid initialize request");
 
-        _logger.LogInformation("Initializing with protocol version {Version}", initRequest.ProtocolVersion);
+        logger.LogInformation("Initializing with protocol version {Version}", initRequest.ProtocolVersion);
 
         var response = new InitializeResponse
         {
@@ -93,24 +87,24 @@ public sealed class MessageHandler : IMessageHandler
 
     private object HandleInitialized()
     {
-        _logger.LogInformation("Server initialized");
+        logger.LogInformation("Server initialized");
         return new { };
     }
 
     private async Task<object> HandleListToolsAsync()
     {
-        var tools = await _toolRegistry.GetToolsAsync();
+        var tools = await toolRegistry.GetToolsAsync();
         return new ListToolsResponse { Tools = tools };
     }
 
     private async Task<object> HandleCallToolAsync(McpRequest request, CancellationToken cancellationToken)
     {
-        var callRequest = request.Params?.Deserialize<CallToolRequest>() 
+        var callRequest = request.Params?.Deserialize(_jsonContext.CallToolRequest) 
             ?? throw new ArgumentException("Invalid tool call request");
 
-        _logger.LogInformation("Calling tool: {ToolName}", callRequest.Name);
+        logger.LogInformation("Calling tool: {ToolName}", callRequest.Name);
 
-        var result = await _toolRegistry.CallToolAsync(
+        var result = await toolRegistry.CallToolAsync(
             callRequest.Name, 
             callRequest.Arguments, 
             cancellationToken);
@@ -124,22 +118,22 @@ public sealed class MessageHandler : IMessageHandler
 
     private object HandlePing()
     {
-        return new { pong = true, timestamp = DateTimeOffset.UtcNow };
+        return new PongResponse();
     }
 
     private Task HandleCancelledNotification(McpNotification notification)
     {
         var requestId = (notification.Params as JsonElement?)?.GetProperty("requestId").GetString();
-        _logger.LogInformation("Request {RequestId} was cancelled", requestId);
+        logger.LogInformation("Request {RequestId} was cancelled", requestId);
         return Task.CompletedTask;
     }
 
     private Task HandleProgressNotification(McpNotification notification)
     {
-        var progress = notification.Params != null ? JsonSerializer.Deserialize<ProgressNotification>(notification.Params.ToString()) : null;
+        var progress = notification.Params != null ? JsonSerializer.Deserialize(notification.Params.ToString() ?? "{}", _jsonContext.ProgressNotification) : null;
         if (progress != null)
         {
-            _logger.LogDebug("Progress for {Token}: {Progress}/{Total}", 
+            logger.LogDebug("Progress for {Token}: {Progress}/{Total}", 
                 progress.ProgressToken, progress.Progress, progress.Total);
         }
         return Task.CompletedTask;

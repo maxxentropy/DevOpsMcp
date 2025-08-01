@@ -1,0 +1,11 @@
+root = true
+
+[*.cs]
+# CA1307: Specify StringComparison for clarity
+dotnet_diagnostic.CA1307.severity = none
+
+# CA1862: Prefer StringComparison for case-insensitive comparison
+dotnet_diagnostic.CA1862.severity = none
+
+# CS1998: Async method lacks await
+dotnet_diagnostic.CS1998.severity = suggestion

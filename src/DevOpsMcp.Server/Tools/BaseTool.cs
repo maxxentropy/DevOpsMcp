@@ -4,16 +4,11 @@ namespace DevOpsMcp.Server.Tools;
 
 public abstract class BaseTool<TArguments> : ITool where TArguments : class
 {
-    private readonly JsonSerializerOptions _jsonOptions;
-    
-    protected BaseTool()
+    private readonly JsonSerializerOptions _jsonOptions = new()
     {
-        _jsonOptions = new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            PropertyNameCaseInsensitive = true
-        };
-    }
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true
+    };
 
     public abstract string Name { get; }
     public abstract string Description { get; }

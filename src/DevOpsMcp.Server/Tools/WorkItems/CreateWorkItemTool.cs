@@ -2,35 +2,13 @@ using DevOpsMcp.Server.Mcp;
 
 namespace DevOpsMcp.Server.Tools.WorkItems;
 
-public sealed class CreateWorkItemTool : BaseTool<CreateWorkItemTool.Arguments>
+public sealed class CreateWorkItemTool(IMediator mediator) : BaseTool<CreateWorkItemToolArguments>
 {
-    private readonly IMediator _mediator;
-
-    public class Arguments
-    {
-        public required string ProjectId { get; set; }
-        public required string WorkItemType { get; set; }
-        public required string Title { get; set; }
-        public string? Description { get; set; }
-        public string? AssignedTo { get; set; }
-        public required string AreaPath { get; set; }
-        public required string IterationPath { get; set; }
-        public int? Priority { get; set; }
-        public string? Severity { get; set; }
-        public List<string>? Tags { get; set; }
-        public Dictionary<string, object>? AdditionalFields { get; set; }
-    }
-
     public override string Name => "create_work_item";
     public override string Description => "Create a new work item in Azure DevOps";
-    public override JsonElement InputSchema => CreateSchema<Arguments>();
+    public override JsonElement InputSchema => CreateSchema<CreateWorkItemToolArguments>();
 
-    public CreateWorkItemTool(IMediator mediator)
-    {
-        _mediator = mediator;
-    }
-
-    protected override async Task<CallToolResponse> ExecuteInternalAsync(Arguments arguments, CancellationToken cancellationToken)
+    protected override async Task<CallToolResponse> ExecuteInternalAsync(CreateWorkItemToolArguments arguments, CancellationToken cancellationToken)
     {
         var command = new CreateWorkItemCommand
         {
@@ -47,7 +25,7 @@ public sealed class CreateWorkItemTool : BaseTool<CreateWorkItemTool.Arguments>
             AdditionalFields = arguments.AdditionalFields
         };
 
-        var result = await _mediator.Send(command, cancellationToken);
+        var result = await mediator.Send(command, cancellationToken);
 
         if (result.IsError)
         {

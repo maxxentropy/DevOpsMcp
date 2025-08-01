@@ -17,19 +17,13 @@ public sealed record AuthenticationResult
     public List<string> Scopes { get; init; } = new();
 }
 
-public sealed class DevOpsAuthenticationProvider : IDevOpsAuthenticationProvider
+public sealed class DevOpsAuthenticationProvider(
+    IOptions<AzureDevOpsOptions> options,
+    ILogger<DevOpsAuthenticationProvider> logger)
+    : IDevOpsAuthenticationProvider
 {
-    private readonly AzureDevOpsOptions _options;
-    private readonly ILogger<DevOpsAuthenticationProvider> _logger;
+    private readonly AzureDevOpsOptions _options = options.Value;
     private AuthenticationResult? _cachedResult;
-
-    public DevOpsAuthenticationProvider(
-        IOptions<AzureDevOpsOptions> options,
-        ILogger<DevOpsAuthenticationProvider> logger)
-    {
-        _options = options.Value;
-        _logger = logger;
-    }
 
     public async Task<AuthenticationResult> AuthenticateAsync(AuthenticationMethod method, CancellationToken cancellationToken = default)
     {
@@ -68,7 +62,7 @@ public sealed class DevOpsAuthenticationProvider : IDevOpsAuthenticationProvider
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error validating permissions for {Operation} on {Resource}", operation, resource);
+            logger.LogError(ex, "Error validating permissions for {Operation} on {Resource}", operation, resource);
             return false;
         }
     }

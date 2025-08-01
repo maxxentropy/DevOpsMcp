@@ -3,6 +3,7 @@ using DevOpsMcp.Server.Protocols;
 using DevOpsMcp.Server.Tools;
 using DevOpsMcp.Server.Tools.Projects;
 using DevOpsMcp.Server.Tools.WorkItems;
+using DevOpsMcp.Server.Tools.Personas;
 
 namespace DevOpsMcp.Server;
 
@@ -26,6 +27,14 @@ public static class DependencyInjection
         services.AddTransient<CreateWorkItemTool>();
         services.AddTransient<QueryWorkItemsTool>();
         
+        // Persona Tools
+        services.AddTransient<ActivatePersonaTool>();
+        services.AddTransient<SelectPersonaTool>();
+        services.AddTransient<InteractWithPersonaTool>();
+        services.AddTransient<GetPersonaStatusTool>();
+        services.AddTransient<ManagePersonaMemoryTool>();
+        services.AddTransient<ConfigurePersonaBehaviorTool>();
+        
         // Register tools with the registry
         services.AddHostedService<ToolRegistrationService>();
         
@@ -33,37 +42,33 @@ public static class DependencyInjection
     }
 }
 
-internal sealed class ToolRegistrationService : IHostedService
+internal sealed class ToolRegistrationService(
+    IToolRegistry toolRegistry,
+    IServiceProvider serviceProvider,
+    ILogger<ToolRegistrationService> logger)
+    : IHostedService
 {
-    private readonly IToolRegistry _toolRegistry;
-    private readonly IServiceProvider _serviceProvider;
-    private readonly ILogger<ToolRegistrationService> _logger;
-
-    public ToolRegistrationService(
-        IToolRegistry toolRegistry,
-        IServiceProvider serviceProvider,
-        ILogger<ToolRegistrationService> logger)
-    {
-        _toolRegistry = toolRegistry;
-        _serviceProvider = serviceProvider;
-        _logger = logger;
-    }
-
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Registering MCP tools");
+        logger.LogInformation("Registering MCP tools");
 
         // Project tools
-        _toolRegistry.RegisterTool(_serviceProvider.GetRequiredService<ListProjectsTool>());
-        _toolRegistry.RegisterTool(_serviceProvider.GetRequiredService<CreateProjectTool>());
+        toolRegistry.RegisterTool(serviceProvider.GetRequiredService<ListProjectsTool>());
+        toolRegistry.RegisterTool(serviceProvider.GetRequiredService<CreateProjectTool>());
         
         // Work item tools
-        _toolRegistry.RegisterTool(_serviceProvider.GetRequiredService<CreateWorkItemTool>());
-        _toolRegistry.RegisterTool(_serviceProvider.GetRequiredService<QueryWorkItemsTool>());
+        toolRegistry.RegisterTool(serviceProvider.GetRequiredService<CreateWorkItemTool>());
+        toolRegistry.RegisterTool(serviceProvider.GetRequiredService<QueryWorkItemsTool>());
         
-        // TODO: Register additional tools as they are implemented
+        // Persona tools
+        toolRegistry.RegisterTool(serviceProvider.GetRequiredService<ActivatePersonaTool>());
+        toolRegistry.RegisterTool(serviceProvider.GetRequiredService<SelectPersonaTool>());
+        toolRegistry.RegisterTool(serviceProvider.GetRequiredService<InteractWithPersonaTool>());
+        toolRegistry.RegisterTool(serviceProvider.GetRequiredService<GetPersonaStatusTool>());
+        toolRegistry.RegisterTool(serviceProvider.GetRequiredService<ManagePersonaMemoryTool>());
+        toolRegistry.RegisterTool(serviceProvider.GetRequiredService<ConfigurePersonaBehaviorTool>());
         
-        _logger.LogInformation("Tool registration completed");
+        logger.LogInformation("Tool registration completed");
         
         return Task.CompletedTask;
     }

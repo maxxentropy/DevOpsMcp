@@ -5,6 +5,7 @@ using OpenTelemetry.Trace;
 using Serilog;
 using DevOpsMcp.Server;
 using DevOpsMcp.Server.Protocols;
+using DevOpsMcp.Server.Mcp;
 
 // Configure Serilog
 Log.Logger = new LoggerConfiguration()
@@ -13,6 +14,10 @@ Log.Logger = new LoggerConfiguration()
     .WriteTo.File("logs/devops-mcp-.txt", rollingInterval: RollingInterval.Day)
     .CreateLogger();
 
+await RunAsync(args);
+
+static async Task RunAsync(string[] args)
+{
 try
 {
     Log.Information("Starting DevOps MCP Server");
@@ -44,24 +49,16 @@ try
     builder.Services.AddHealthChecks();
     
     // Add API endpoints
-    builder.Services.AddControllers();
     builder.Services.AddEndpointsApiExplorer();
-    builder.Services.AddSwaggerGen();
     
     var app = builder.Build();
     
     // Configure pipeline
-    if (app.Environment.IsDevelopment())
-    {
-        app.UseSwagger();
-        app.UseSwaggerUI();
-    }
     
     app.UseSerilogRequestLogging();
     app.UseHealthChecks("/health");
     
     // Map endpoints
-    app.MapControllers();
     
     // SSE endpoint
     app.MapGet("/sse", async (HttpContext context, SseProtocolHandler handler) =>
@@ -69,8 +66,14 @@ try
         await handler.HandleConnectionAsync(context);
     });
     
-    app.MapPost("/rpc", async (HttpContext context, SseProtocolHandler handler, McpRequest request) =>
+    app.MapPost("/rpc", async (HttpContext context, SseProtocolHandler handler) =>
     {
+        var jsonContext = new McpJsonSerializerContext();
+        var request = await context.Request.ReadFromJsonAsync(jsonContext.McpRequest);
+        if (request == null)
+        {
+            return Results.BadRequest("Invalid request");
+        }
         return await handler.HandleRequestAsync(context, request);
     });
     
@@ -88,7 +91,7 @@ try
         });
     }
     
-    app.Run();
+    await app.RunAsync();
 }
 catch (Exception ex)
 {
@@ -96,5 +99,6 @@ catch (Exception ex)
 }
 finally
 {
-    Log.CloseAndFlush();
+    await Log.CloseAndFlushAsync();
+}
 }

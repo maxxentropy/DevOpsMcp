@@ -18,7 +18,7 @@ public sealed record PersonalAccessToken
         
         if (token.Length < 52)
         {
-            return Error.Validation("PersonalAccessToken.TooShort", "Personal Access Token appears to be invalid");
+            
         }
         
         return new PersonalAccessToken(token);

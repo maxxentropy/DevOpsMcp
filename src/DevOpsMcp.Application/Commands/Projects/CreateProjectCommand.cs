@@ -11,22 +11,14 @@ public sealed record CreateProjectCommand : IRequest<ErrorOr<ProjectDto>>
     public Dictionary<string, object>? Properties { get; init; }
 }
 
-public sealed class CreateProjectCommandHandler : IRequestHandler<CreateProjectCommand, ErrorOr<ProjectDto>>
+public sealed class CreateProjectCommandHandler(
+    IProjectRepository projectRepository,
+    ILogger<CreateProjectCommandHandler> logger)
+    : IRequestHandler<CreateProjectCommand, ErrorOr<ProjectDto>>
 {
-    private readonly IProjectRepository _projectRepository;
-    private readonly ILogger<CreateProjectCommandHandler> _logger;
-
-    public CreateProjectCommandHandler(
-        IProjectRepository projectRepository,
-        ILogger<CreateProjectCommandHandler> logger)
-    {
-        _projectRepository = projectRepository;
-        _logger = logger;
-    }
-
     public async Task<ErrorOr<ProjectDto>> Handle(CreateProjectCommand request, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Creating project {ProjectName}", request.Name);
+        logger.LogInformation("Creating project {ProjectName}", request.Name);
 
         var organizationUrl = OrganizationUrl.Create(request.OrganizationUrl);
         if (organizationUrl.IsError)
@@ -55,7 +47,7 @@ public sealed class CreateProjectCommandHandler : IRequestHandler<CreateProjectC
             }
         }
 
-        var createdProject = await _projectRepository.CreateAsync(project, cancellationToken);
+        var createdProject = await projectRepository.CreateAsync(project, cancellationToken);
 
         return new ProjectDto
         {

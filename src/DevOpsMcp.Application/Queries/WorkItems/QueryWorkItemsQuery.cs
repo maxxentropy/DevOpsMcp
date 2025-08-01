@@ -8,33 +8,23 @@ public sealed record QueryWorkItemsQuery : IRequest<ErrorOr<List<WorkItemDto>>>
     public required string Wiql { get; init; }
 }
 
-public sealed class QueryWorkItemsQueryHandler : IRequestHandler<QueryWorkItemsQuery, ErrorOr<List<WorkItemDto>>>
+public sealed class QueryWorkItemsQueryHandler(
+    IWorkItemRepository workItemRepository,
+    IProjectRepository projectRepository,
+    ILogger<QueryWorkItemsQueryHandler> logger)
+    : IRequestHandler<QueryWorkItemsQuery, ErrorOr<List<WorkItemDto>>>
 {
-    private readonly IWorkItemRepository _workItemRepository;
-    private readonly IProjectRepository _projectRepository;
-    private readonly ILogger<QueryWorkItemsQueryHandler> _logger;
-
-    public QueryWorkItemsQueryHandler(
-        IWorkItemRepository workItemRepository,
-        IProjectRepository projectRepository,
-        ILogger<QueryWorkItemsQueryHandler> logger)
-    {
-        _workItemRepository = workItemRepository;
-        _projectRepository = projectRepository;
-        _logger = logger;
-    }
-
     public async Task<ErrorOr<List<WorkItemDto>>> Handle(QueryWorkItemsQuery request, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Querying work items in project {ProjectId}", request.ProjectId);
+        logger.LogInformation("Querying work items in project {ProjectId}", request.ProjectId);
 
-        var projectExists = await _projectRepository.ExistsAsync(request.ProjectId, cancellationToken);
+        var projectExists = await projectRepository.ExistsAsync(request.ProjectId, cancellationToken);
         if (!projectExists)
         {
             return Error.NotFound("Project.NotFound", $"Project {request.ProjectId} not found");
         }
 
-        var workItems = await _workItemRepository.QueryAsync(request.ProjectId, request.Wiql, cancellationToken);
+        var workItems = await workItemRepository.QueryAsync(request.ProjectId, request.Wiql, cancellationToken);
 
         var dtos = workItems.Select(MapToDto).ToList();
         return dtos;

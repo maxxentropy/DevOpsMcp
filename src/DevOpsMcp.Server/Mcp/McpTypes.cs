@@ -146,3 +146,14 @@ public sealed record LogMessageNotification
     public required string Logger { get; init; }
     public required object Data { get; init; }
 }
+
+public sealed record PingEvent
+{
+    public required DateTimeOffset Timestamp { get; init; }
+}
+
+public sealed record PongResponse
+{
+    public bool Pong { get; init; } = true;
+    public DateTimeOffset Timestamp { get; init; } = DateTimeOffset.UtcNow;
+}

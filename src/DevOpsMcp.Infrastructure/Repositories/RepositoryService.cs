@@ -10,31 +10,23 @@ using ApiGitCommit = Microsoft.TeamFoundation.SourceControl.WebApi.GitCommit;
 
 namespace DevOpsMcp.Infrastructure.Repositories;
 
-public sealed class RepositoryService : IRepositoryService
+public sealed class RepositoryService(
+    IAzureDevOpsClientFactory clientFactory,
+    ILogger<RepositoryService> logger)
+    : IRepositoryService
 {
-    private readonly IAzureDevOpsClientFactory _clientFactory;
-    private readonly ILogger<RepositoryService> _logger;
-
-    public RepositoryService(
-        IAzureDevOpsClientFactory clientFactory,
-        ILogger<RepositoryService> logger)
-    {
-        _clientFactory = clientFactory;
-        _logger = logger;
-    }
-
     public async Task<DomainRepository?> GetByIdAsync(string projectId, string repositoryId, CancellationToken cancellationToken = default)
     {
         try
         {
-            var client = _clientFactory.CreateGitClient();
+            var client = clientFactory.CreateGitClient();
             var repo = await client.GetRepositoryAsync(projectId, repositoryId, cancellationToken: cancellationToken);
             
             return MapToEntity(repo);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting repository {RepositoryId} in project {ProjectId}", repositoryId, projectId);
+            logger.LogError(ex, "Error getting repository {RepositoryId} in project {ProjectId}", repositoryId, projectId);
             return null;
         }
     }
@@ -43,14 +35,14 @@ public sealed class RepositoryService : IRepositoryService
     {
         try
         {
-            var client = _clientFactory.CreateGitClient();
+            var client = clientFactory.CreateGitClient();
             var repos = await client.GetRepositoriesAsync(projectId, cancellationToken: cancellationToken);
             
             return repos.Select(r => MapToEntity(r)).ToList();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting repositories in project {ProjectId}", projectId);
+            logger.LogError(ex, "Error getting repositories in project {ProjectId}", projectId);
             throw;
         }
     }
@@ -59,7 +51,7 @@ public sealed class RepositoryService : IRepositoryService
     {
         try
         {
-            var client = _clientFactory.CreateGitClient();
+            var client = clientFactory.CreateGitClient();
             
             var gitRepoOptions = new GitRepositoryCreateOptions
             {
@@ -81,7 +73,7 @@ public sealed class RepositoryService : IRepositoryService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating repository in project {ProjectId}", projectId);
+            logger.LogError(ex, "Error creating repository in project {ProjectId}", projectId);
             throw;
         }
     }
@@ -90,7 +82,7 @@ public sealed class RepositoryService : IRepositoryService
     {
         try
         {
-            var client = _clientFactory.CreateGitClient();
+            var client = clientFactory.CreateGitClient();
             
             var repo = await client.GetRepositoryAsync(projectId, repositoryId, cancellationToken: cancellationToken);
             
@@ -110,7 +102,7 @@ public sealed class RepositoryService : IRepositoryService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error updating repository {RepositoryId} in project {ProjectId}", repositoryId, projectId);
+            logger.LogError(ex, "Error updating repository {RepositoryId} in project {ProjectId}", repositoryId, projectId);
             throw;
         }
     }
@@ -119,12 +111,12 @@ public sealed class RepositoryService : IRepositoryService
     {
         try
         {
-            var client = _clientFactory.CreateGitClient();
+            var client = clientFactory.CreateGitClient();
             await client.DeleteRepositoryAsync(Guid.Parse(repositoryId), cancellationToken: cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error deleting repository {RepositoryId} in project {ProjectId}", repositoryId, projectId);
+            logger.LogError(ex, "Error deleting repository {RepositoryId} in project {ProjectId}", repositoryId, projectId);
             throw;
         }
     }
@@ -133,7 +125,7 @@ public sealed class RepositoryService : IRepositoryService
     {
         try
         {
-            var client = _clientFactory.CreateGitClient();
+            var client = clientFactory.CreateGitClient();
             var refs = await client.GetRefsAsync(projectId, repositoryId, filter: "heads/", cancellationToken: cancellationToken);
             
             return refs.Select(r => new DomainGitRef
@@ -145,7 +137,7 @@ public sealed class RepositoryService : IRepositoryService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting branches for repository {RepositoryId}", repositoryId);
+            logger.LogError(ex, "Error getting branches for repository {RepositoryId}", repositoryId);
             throw;
         }
     }
@@ -154,7 +146,7 @@ public sealed class RepositoryService : IRepositoryService
     {
         try
         {
-            var client = _clientFactory.CreateGitClient();
+            var client = clientFactory.CreateGitClient();
             
             var searchCriteria = new GitQueryCommitsCriteria
             {
@@ -181,7 +173,7 @@ public sealed class RepositoryService : IRepositoryService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting commits for repository {RepositoryId}", repositoryId);
+            logger.LogError(ex, "Error getting commits for repository {RepositoryId}", repositoryId);
             throw;
         }
     }

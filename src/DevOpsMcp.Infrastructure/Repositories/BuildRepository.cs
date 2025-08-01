@@ -15,31 +15,23 @@ using ApiBuildArtifact = Microsoft.TeamFoundation.Build.WebApi.BuildArtifact;
 
 namespace DevOpsMcp.Infrastructure.Repositories;
 
-public sealed class BuildRepository : IBuildRepository
+public sealed class BuildRepository(
+    IAzureDevOpsClientFactory clientFactory,
+    ILogger<BuildRepository> logger)
+    : IBuildRepository
 {
-    private readonly IAzureDevOpsClientFactory _clientFactory;
-    private readonly ILogger<BuildRepository> _logger;
-
-    public BuildRepository(
-        IAzureDevOpsClientFactory clientFactory,
-        ILogger<BuildRepository> logger)
-    {
-        _clientFactory = clientFactory;
-        _logger = logger;
-    }
-
     public async Task<DomainBuild?> GetByIdAsync(string projectId, int buildId, CancellationToken cancellationToken = default)
     {
         try
         {
-            var client = _clientFactory.CreateBuildClient();
+            var client = clientFactory.CreateBuildClient();
             var build = await client.GetBuildAsync(projectId, buildId, cancellationToken: cancellationToken);
             
             return MapToEntity(build);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting build {BuildId} in project {ProjectId}", buildId, projectId);
+            logger.LogError(ex, "Error getting build {BuildId} in project {ProjectId}", buildId, projectId);
             return null;
         }
     }
@@ -48,7 +40,7 @@ public sealed class BuildRepository : IBuildRepository
     {
         try
         {
-            var client = _clientFactory.CreateBuildClient();
+            var client = clientFactory.CreateBuildClient();
             
             var builds = await client.GetBuildsAsync(
                 projectId,
@@ -65,7 +57,7 @@ public sealed class BuildRepository : IBuildRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting builds in project {ProjectId}", projectId);
+            logger.LogError(ex, "Error getting builds in project {ProjectId}", projectId);
             throw;
         }
     }
@@ -74,7 +66,7 @@ public sealed class BuildRepository : IBuildRepository
     {
         try
         {
-            var client = _clientFactory.CreateBuildClient();
+            var client = clientFactory.CreateBuildClient();
             
             var definition = await client.GetDefinitionAsync(projectId, request.DefinitionId, cancellationToken: cancellationToken);
             
@@ -92,7 +84,7 @@ public sealed class BuildRepository : IBuildRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error queuing build in project {ProjectId}", projectId);
+            logger.LogError(ex, "Error queuing build in project {ProjectId}", projectId);
             throw;
         }
     }
@@ -101,7 +93,7 @@ public sealed class BuildRepository : IBuildRepository
     {
         try
         {
-            var client = _clientFactory.CreateBuildClient();
+            var client = clientFactory.CreateBuildClient();
             
             var build = await client.GetBuildAsync(projectId, buildId, cancellationToken: cancellationToken);
             
@@ -123,7 +115,7 @@ public sealed class BuildRepository : IBuildRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error updating build {BuildId} in project {ProjectId}", buildId, projectId);
+            logger.LogError(ex, "Error updating build {BuildId} in project {ProjectId}", buildId, projectId);
             throw;
         }
     }
@@ -132,7 +124,7 @@ public sealed class BuildRepository : IBuildRepository
     {
         try
         {
-            var client = _clientFactory.CreateBuildClient();
+            var client = clientFactory.CreateBuildClient();
             
             var build = await client.GetBuildAsync(projectId, buildId, cancellationToken: cancellationToken);
             build.Status = Microsoft.TeamFoundation.Build.WebApi.BuildStatus.Cancelling;
@@ -143,7 +135,7 @@ public sealed class BuildRepository : IBuildRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error cancelling build {BuildId} in project {ProjectId}", buildId, projectId);
+            logger.LogError(ex, "Error cancelling build {BuildId} in project {ProjectId}", buildId, projectId);
             throw;
         }
     }
@@ -152,7 +144,7 @@ public sealed class BuildRepository : IBuildRepository
     {
         try
         {
-            var client = _clientFactory.CreateBuildClient();
+            var client = clientFactory.CreateBuildClient();
             
             var logs = await client.GetBuildLogsAsync(projectId, buildId, cancellationToken: cancellationToken);
             
@@ -178,7 +170,7 @@ public sealed class BuildRepository : IBuildRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting build logs for build {BuildId} in project {ProjectId}", buildId, projectId);
+            logger.LogError(ex, "Error getting build logs for build {BuildId} in project {ProjectId}", buildId, projectId);
             throw;
         }
     }
@@ -187,7 +179,7 @@ public sealed class BuildRepository : IBuildRepository
     {
         try
         {
-            var client = _clientFactory.CreateBuildClient();
+            var client = clientFactory.CreateBuildClient();
             
             var artifacts = await client.GetArtifactsAsync(projectId, buildId, cancellationToken: cancellationToken);
             
@@ -200,7 +192,7 @@ public sealed class BuildRepository : IBuildRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting build artifacts for build {BuildId} in project {ProjectId}", buildId, projectId);
+            logger.LogError(ex, "Error getting build artifacts for build {BuildId} in project {ProjectId}", buildId, projectId);
             throw;
         }
     }

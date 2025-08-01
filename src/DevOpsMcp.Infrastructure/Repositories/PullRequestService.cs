@@ -12,31 +12,23 @@ using ApiCommentThreadStatus = Microsoft.TeamFoundation.SourceControl.WebApi.Com
 
 namespace DevOpsMcp.Infrastructure.Repositories;
 
-public sealed class PullRequestService : IPullRequestService
+public sealed class PullRequestService(
+    IAzureDevOpsClientFactory clientFactory,
+    ILogger<PullRequestService> logger)
+    : IPullRequestService
 {
-    private readonly IAzureDevOpsClientFactory _clientFactory;
-    private readonly ILogger<PullRequestService> _logger;
-
-    public PullRequestService(
-        IAzureDevOpsClientFactory clientFactory,
-        ILogger<PullRequestService> logger)
-    {
-        _clientFactory = clientFactory;
-        _logger = logger;
-    }
-
     public async Task<DomainPullRequest?> GetByIdAsync(string projectId, string repositoryId, int pullRequestId, CancellationToken cancellationToken = default)
     {
         try
         {
-            var client = _clientFactory.CreateGitClient();
+            var client = clientFactory.CreateGitClient();
             var pr = await client.GetPullRequestAsync(projectId, repositoryId, pullRequestId, cancellationToken: cancellationToken);
             
             return MapToEntity(pr);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting pull request {PullRequestId}", pullRequestId);
+            logger.LogError(ex, "Error getting pull request {PullRequestId}", pullRequestId);
             return null;
         }
     }
@@ -45,7 +37,7 @@ public sealed class PullRequestService : IPullRequestService
     {
         try
         {
-            var client = _clientFactory.CreateGitClient();
+            var client = clientFactory.CreateGitClient();
             
             var searchCriteria = new GitPullRequestSearchCriteria
             {
@@ -62,7 +54,7 @@ public sealed class PullRequestService : IPullRequestService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting pull requests in repository {RepositoryId}", repositoryId);
+            logger.LogError(ex, "Error getting pull requests in repository {RepositoryId}", repositoryId);
             throw;
         }
     }
@@ -71,7 +63,7 @@ public sealed class PullRequestService : IPullRequestService
     {
         try
         {
-            var client = _clientFactory.CreateGitClient();
+            var client = clientFactory.CreateGitClient();
             
             var gitPr = new GitPullRequest
             {
@@ -116,7 +108,7 @@ public sealed class PullRequestService : IPullRequestService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating pull request in repository {RepositoryId}", repositoryId);
+            logger.LogError(ex, "Error creating pull request in repository {RepositoryId}", repositoryId);
             throw;
         }
     }
@@ -125,7 +117,7 @@ public sealed class PullRequestService : IPullRequestService
     {
         try
         {
-            var client = _clientFactory.CreateGitClient();
+            var client = clientFactory.CreateGitClient();
             
             var pr = await client.GetPullRequestAsync(projectId, repositoryId, pullRequestId, cancellationToken: cancellationToken);
             
@@ -155,7 +147,7 @@ public sealed class PullRequestService : IPullRequestService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error updating pull request {PullRequestId}", pullRequestId);
+            logger.LogError(ex, "Error updating pull request {PullRequestId}", pullRequestId);
             throw;
         }
     }
@@ -164,7 +156,7 @@ public sealed class PullRequestService : IPullRequestService
     {
         try
         {
-            var client = _clientFactory.CreateGitClient();
+            var client = clientFactory.CreateGitClient();
             
             var pr = await client.GetPullRequestAsync(projectId, repositoryId, pullRequestId, cancellationToken: cancellationToken);
             
@@ -178,7 +170,7 @@ public sealed class PullRequestService : IPullRequestService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error completing pull request {PullRequestId}", pullRequestId);
+            logger.LogError(ex, "Error completing pull request {PullRequestId}", pullRequestId);
             throw;
         }
     }
@@ -187,7 +179,7 @@ public sealed class PullRequestService : IPullRequestService
     {
         try
         {
-            var client = _clientFactory.CreateGitClient();
+            var client = clientFactory.CreateGitClient();
             
             var pr = await client.GetPullRequestAsync(projectId, repositoryId, pullRequestId, cancellationToken: cancellationToken);
             pr.Status = ApiPullRequestStatus.Abandoned;
@@ -198,7 +190,7 @@ public sealed class PullRequestService : IPullRequestService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error abandoning pull request {PullRequestId}", pullRequestId);
+            logger.LogError(ex, "Error abandoning pull request {PullRequestId}", pullRequestId);
             throw;
         }
     }
@@ -207,7 +199,7 @@ public sealed class PullRequestService : IPullRequestService
     {
         try
         {
-            var client = _clientFactory.CreateGitClient();
+            var client = clientFactory.CreateGitClient();
             
             var pr = await client.GetPullRequestAsync(projectId, repositoryId, pullRequestId, cancellationToken: cancellationToken);
             pr.Status = ApiPullRequestStatus.Active;
@@ -218,7 +210,7 @@ public sealed class PullRequestService : IPullRequestService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error reactivating pull request {PullRequestId}", pullRequestId);
+            logger.LogError(ex, "Error reactivating pull request {PullRequestId}", pullRequestId);
             throw;
         }
     }
@@ -227,7 +219,7 @@ public sealed class PullRequestService : IPullRequestService
     {
         try
         {
-            var client = _clientFactory.CreateGitClient();
+            var client = clientFactory.CreateGitClient();
             
             var reviewer = new IdentityRefWithVote
             {
@@ -242,7 +234,7 @@ public sealed class PullRequestService : IPullRequestService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error adding reviewer to pull request {PullRequestId}", pullRequestId);
+            logger.LogError(ex, "Error adding reviewer to pull request {PullRequestId}", pullRequestId);
             throw;
         }
     }
@@ -251,7 +243,7 @@ public sealed class PullRequestService : IPullRequestService
     {
         try
         {
-            var client = _clientFactory.CreateGitClient();
+            var client = clientFactory.CreateGitClient();
             
             var reviewer = new IdentityRefWithVote
             {
@@ -266,7 +258,7 @@ public sealed class PullRequestService : IPullRequestService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error voting on pull request {PullRequestId}", pullRequestId);
+            logger.LogError(ex, "Error voting on pull request {PullRequestId}", pullRequestId);
             throw;
         }
     }
@@ -275,7 +267,7 @@ public sealed class PullRequestService : IPullRequestService
     {
         try
         {
-            var client = _clientFactory.CreateGitClient();
+            var client = clientFactory.CreateGitClient();
             
             var thread = new GitPullRequestCommentThread
             {
@@ -304,7 +296,7 @@ public sealed class PullRequestService : IPullRequestService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error adding comment to pull request {PullRequestId}", pullRequestId);
+            logger.LogError(ex, "Error adding comment to pull request {PullRequestId}", pullRequestId);
             throw;
         }
     }

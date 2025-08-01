@@ -2,26 +2,13 @@ using DevOpsMcp.Server.Mcp;
 
 namespace DevOpsMcp.Server.Tools.WorkItems;
 
-public sealed class QueryWorkItemsTool : BaseTool<QueryWorkItemsTool.Arguments>
+public sealed class QueryWorkItemsTool(IMediator mediator) : BaseTool<QueryWorkItemsToolArguments>
 {
-    private readonly IMediator _mediator;
-
-    public class Arguments
-    {
-        public required string ProjectId { get; set; }
-        public required string Wiql { get; set; }
-    }
-
     public override string Name => "query_work_items";
     public override string Description => "Query work items using WIQL (Work Item Query Language)";
-    public override JsonElement InputSchema => CreateSchema<Arguments>();
+    public override JsonElement InputSchema => CreateSchema<QueryWorkItemsToolArguments>();
 
-    public QueryWorkItemsTool(IMediator mediator)
-    {
-        _mediator = mediator;
-    }
-
-    protected override async Task<CallToolResponse> ExecuteInternalAsync(Arguments arguments, CancellationToken cancellationToken)
+    protected override async Task<CallToolResponse> ExecuteInternalAsync(QueryWorkItemsToolArguments arguments, CancellationToken cancellationToken)
     {
         var query = new QueryWorkItemsQuery
         {
@@ -29,7 +16,7 @@ public sealed class QueryWorkItemsTool : BaseTool<QueryWorkItemsTool.Arguments>
             Wiql = arguments.Wiql
         };
 
-        var result = await _mediator.Send(query, cancellationToken);
+        var result = await mediator.Send(query, cancellationToken);
 
         if (result.IsError)
         {

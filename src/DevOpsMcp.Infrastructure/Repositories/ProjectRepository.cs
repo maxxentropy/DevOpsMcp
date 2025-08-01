@@ -10,36 +10,28 @@ using ApiProjectState = Microsoft.TeamFoundation.Core.WebApi.ProjectState;
 
 namespace DevOpsMcp.Infrastructure.Repositories;
 
-public sealed class ProjectRepository : IProjectRepository
+public sealed class ProjectRepository(
+    IAzureDevOpsClientFactory clientFactory,
+    ILogger<ProjectRepository> logger)
+    : IProjectRepository
 {
-    private readonly IAzureDevOpsClientFactory _clientFactory;
-    private readonly ILogger<ProjectRepository> _logger;
-
-    public ProjectRepository(
-        IAzureDevOpsClientFactory clientFactory,
-        ILogger<ProjectRepository> logger)
-    {
-        _clientFactory = clientFactory;
-        _logger = logger;
-    }
-
     public async Task<DomainProject?> GetByIdAsync(string projectId, CancellationToken cancellationToken = default)
     {
         try
         {
-            var client = _clientFactory.CreateProjectClient();
+            var client = clientFactory.CreateProjectClient();
             var project = await client.GetProject(projectId);
             
             return MapToEntity(project);
         }
         catch (ProjectDoesNotExistException)
         {
-            _logger.LogWarning("Project {ProjectId} not found", projectId);
+            logger.LogWarning("Project {ProjectId} not found", projectId);
             return null;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting project {ProjectId}", projectId);
+            logger.LogError(ex, "Error getting project {ProjectId}", projectId);
             throw;
         }
     }
@@ -48,7 +40,7 @@ public sealed class ProjectRepository : IProjectRepository
     {
         try
         {
-            var client = _clientFactory.CreateProjectClient();
+            var client = clientFactory.CreateProjectClient();
             var projects = await client.GetProjects();
             
             var fullProjects = new List<DomainProject>();
@@ -61,7 +53,7 @@ public sealed class ProjectRepository : IProjectRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting all projects");
+            logger.LogError(ex, "Error getting all projects");
             throw;
         }
     }
@@ -70,7 +62,7 @@ public sealed class ProjectRepository : IProjectRepository
     {
         try
         {
-            var client = _clientFactory.CreateProjectClient();
+            var client = clientFactory.CreateProjectClient();
             
             var projectToCreate = new TeamProject
             {
@@ -93,7 +85,7 @@ public sealed class ProjectRepository : IProjectRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating project {ProjectName}", project.Name);
+            logger.LogError(ex, "Error creating project {ProjectName}", project.Name);
             throw;
         }
     }
@@ -102,7 +94,7 @@ public sealed class ProjectRepository : IProjectRepository
     {
         try
         {
-            var client = _clientFactory.CreateProjectClient();
+            var client = clientFactory.CreateProjectClient();
             
             var projectToUpdate = new TeamProject
             {
@@ -121,7 +113,7 @@ public sealed class ProjectRepository : IProjectRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error updating project {ProjectId}", project.Id);
+            logger.LogError(ex, "Error updating project {ProjectId}", project.Id);
             throw;
         }
     }
@@ -130,12 +122,12 @@ public sealed class ProjectRepository : IProjectRepository
     {
         try
         {
-            var client = _clientFactory.CreateProjectClient();
+            var client = clientFactory.CreateProjectClient();
             await client.QueueDeleteProject(Guid.Parse(projectId));
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error deleting project {ProjectId}", projectId);
+            logger.LogError(ex, "Error deleting project {ProjectId}", projectId);
             throw;
         }
     }

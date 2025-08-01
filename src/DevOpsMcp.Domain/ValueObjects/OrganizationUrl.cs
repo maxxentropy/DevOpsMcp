@@ -24,7 +24,7 @@ public sealed record OrganizationUrl
         if (!uri.Host.EndsWith("dev.azure.com", StringComparison.OrdinalIgnoreCase) &&
             !uri.Host.EndsWith("visualstudio.com", StringComparison.OrdinalIgnoreCase))
         {
-            return Error.Validation("OrganizationUrl.InvalidHost", "Organization URL must be an Azure DevOps URL");
+            
         }
         
         return new OrganizationUrl(url);

@@ -10,31 +10,23 @@ using ApiWorkItemRelation = Microsoft.TeamFoundation.WorkItemTracking.WebApi.Mod
 
 namespace DevOpsMcp.Infrastructure.Repositories;
 
-public sealed class WorkItemRepository : IWorkItemRepository
+public sealed class WorkItemRepository(
+    IAzureDevOpsClientFactory clientFactory,
+    ILogger<WorkItemRepository> logger)
+    : IWorkItemRepository
 {
-    private readonly IAzureDevOpsClientFactory _clientFactory;
-    private readonly ILogger<WorkItemRepository> _logger;
-
-    public WorkItemRepository(
-        IAzureDevOpsClientFactory clientFactory,
-        ILogger<WorkItemRepository> logger)
-    {
-        _clientFactory = clientFactory;
-        _logger = logger;
-    }
-
     public async Task<DomainWorkItem?> GetByIdAsync(string projectId, int workItemId, CancellationToken cancellationToken = default)
     {
         try
         {
-            var client = _clientFactory.CreateWorkItemClient();
+            var client = clientFactory.CreateWorkItemClient();
             var workItem = await client.GetWorkItemAsync(projectId, workItemId, expand: WorkItemExpand.All, cancellationToken: cancellationToken);
             
             return MapToEntity(workItem);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting work item {WorkItemId} in project {ProjectId}", workItemId, projectId);
+            logger.LogError(ex, "Error getting work item {WorkItemId} in project {ProjectId}", workItemId, projectId);
             return null;
         }
     }
@@ -43,14 +35,14 @@ public sealed class WorkItemRepository : IWorkItemRepository
     {
         try
         {
-            var client = _clientFactory.CreateWorkItemClient();
+            var client = clientFactory.CreateWorkItemClient();
             var workItems = await client.GetWorkItemsAsync(projectId, workItemIds.ToList(), expand: WorkItemExpand.All, cancellationToken: cancellationToken);
             
             return workItems.Select(MapToEntity).ToList();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting work items in project {ProjectId}", projectId);
+            logger.LogError(ex, "Error getting work items in project {ProjectId}", projectId);
             throw;
         }
     }
@@ -59,7 +51,7 @@ public sealed class WorkItemRepository : IWorkItemRepository
     {
         try
         {
-            var client = _clientFactory.CreateWorkItemClient();
+            var client = clientFactory.CreateWorkItemClient();
             var document = new JsonPatchDocument();
 
             document.Add(new JsonPatchOperation
@@ -149,7 +141,7 @@ public sealed class WorkItemRepository : IWorkItemRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating work item in project {ProjectId}", projectId);
+            logger.LogError(ex, "Error creating work item in project {ProjectId}", projectId);
             throw;
         }
     }
@@ -158,7 +150,7 @@ public sealed class WorkItemRepository : IWorkItemRepository
     {
         try
         {
-            var client = _clientFactory.CreateWorkItemClient();
+            var client = clientFactory.CreateWorkItemClient();
             var document = new JsonPatchDocument();
 
             document.Add(new JsonPatchOperation
@@ -191,7 +183,7 @@ public sealed class WorkItemRepository : IWorkItemRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error updating work item {WorkItemId} in project {ProjectId}", workItem.Id, projectId);
+            logger.LogError(ex, "Error updating work item {WorkItemId} in project {ProjectId}", workItem.Id, projectId);
             throw;
         }
     }
@@ -200,12 +192,12 @@ public sealed class WorkItemRepository : IWorkItemRepository
     {
         try
         {
-            var client = _clientFactory.CreateWorkItemClient();
+            var client = clientFactory.CreateWorkItemClient();
             await client.DeleteWorkItemAsync(workItemId, destroy: true, cancellationToken: cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error deleting work item {WorkItemId} in project {ProjectId}", workItemId, projectId);
+            logger.LogError(ex, "Error deleting work item {WorkItemId} in project {ProjectId}", workItemId, projectId);
             throw;
         }
     }
@@ -214,7 +206,7 @@ public sealed class WorkItemRepository : IWorkItemRepository
     {
         try
         {
-            var client = _clientFactory.CreateWorkItemClient();
+            var client = clientFactory.CreateWorkItemClient();
             var query = new Wiql { Query = wiql };
             
             var result = await client.QueryByWiqlAsync(query, projectId, cancellationToken: cancellationToken);
@@ -231,7 +223,7 @@ public sealed class WorkItemRepository : IWorkItemRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error querying work items in project {ProjectId}", projectId);
+            logger.LogError(ex, "Error querying work items in project {ProjectId}", projectId);
             throw;
         }
     }
@@ -240,7 +232,7 @@ public sealed class WorkItemRepository : IWorkItemRepository
     {
         try
         {
-            var client = _clientFactory.CreateWorkItemClient();
+            var client = clientFactory.CreateWorkItemClient();
             var document = new JsonPatchDocument();
 
             document.Add(new JsonPatchOperation
@@ -261,7 +253,7 @@ public sealed class WorkItemRepository : IWorkItemRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error adding relation to work item {WorkItemId}", workItemId);
+            logger.LogError(ex, "Error adding relation to work item {WorkItemId}", workItemId);
             throw;
         }
     }
@@ -270,7 +262,7 @@ public sealed class WorkItemRepository : IWorkItemRepository
     {
         try
         {
-            var client = _clientFactory.CreateWorkItemClient();
+            var client = clientFactory.CreateWorkItemClient();
             var workItem = await client.GetWorkItemAsync(workItemId, expand: WorkItemExpand.Relations, cancellationToken: cancellationToken);
             
             var relationIndex = workItem.Relations?.ToList().FindIndex(r => r.Url == relationUrl) ?? -1;
@@ -292,7 +284,7 @@ public sealed class WorkItemRepository : IWorkItemRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error removing relation from work item {WorkItemId}", workItemId);
+            logger.LogError(ex, "Error removing relation from work item {WorkItemId}", workItemId);
             throw;
         }
     }

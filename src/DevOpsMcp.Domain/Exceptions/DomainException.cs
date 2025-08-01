@@ -16,26 +16,11 @@ public abstract class DomainException : Exception
     }
 }
 
-public sealed class EntityNotFoundException : DomainException
-{
-    public EntityNotFoundException(string entityType, string id) 
-        : base($"{entityType}.NotFound", $"{entityType} with id '{id}' was not found")
-    {
-    }
-}
+public sealed class EntityNotFoundException(string entityType, string id)
+    : DomainException($"{entityType}.NotFound", $"{entityType} with id '{id}' was not found");
 
-public sealed class InvalidOperationException : DomainException
-{
-    public InvalidOperationException(string operation, string reason) 
-        : base($"Operation.{operation}.Invalid", $"Cannot perform {operation}: {reason}")
-    {
-    }
-}
+public sealed class InvalidOperationException(string operation, string reason)
+    : DomainException($"Operation.{operation}.Invalid", $"Cannot perform {operation}: {reason}");
 
-public sealed class BusinessRuleViolationException : DomainException
-{
-    public BusinessRuleViolationException(string rule, string message) 
-        : base($"BusinessRule.{rule}", message)
-    {
-    }
-}
+public sealed class BusinessRuleViolationException(string rule, string message)
+    : DomainException($"BusinessRule.{rule}", message);

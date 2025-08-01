@@ -17,30 +17,18 @@ public sealed record CreateWorkItemCommand : IRequest<ErrorOr<WorkItemDto>>
     public Dictionary<string, object>? AdditionalFields { get; init; }
 }
 
-public sealed class CreateWorkItemCommandHandler : IRequestHandler<CreateWorkItemCommand, ErrorOr<WorkItemDto>>
+public sealed class CreateWorkItemCommandHandler(
+    IWorkItemRepository workItemRepository,
+    IProjectRepository projectRepository,
+    IMediator mediator,
+    ILogger<CreateWorkItemCommandHandler> logger)
+    : IRequestHandler<CreateWorkItemCommand, ErrorOr<WorkItemDto>>
 {
-    private readonly IWorkItemRepository _workItemRepository;
-    private readonly IProjectRepository _projectRepository;
-    private readonly IMediator _mediator;
-    private readonly ILogger<CreateWorkItemCommandHandler> _logger;
-
-    public CreateWorkItemCommandHandler(
-        IWorkItemRepository workItemRepository,
-        IProjectRepository projectRepository,
-        IMediator mediator,
-        ILogger<CreateWorkItemCommandHandler> logger)
-    {
-        _workItemRepository = workItemRepository;
-        _projectRepository = projectRepository;
-        _mediator = mediator;
-        _logger = logger;
-    }
-
     public async Task<ErrorOr<WorkItemDto>> Handle(CreateWorkItemCommand request, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Creating work item in project {ProjectId}", request.ProjectId);
+        logger.LogInformation("Creating work item in project {ProjectId}", request.ProjectId);
 
-        var projectExists = await _projectRepository.ExistsAsync(request.ProjectId, cancellationToken);
+        var projectExists = await projectRepository.ExistsAsync(request.ProjectId, cancellationToken);
         if (!projectExists)
         {
             return Error.NotFound("Project.NotFound", $"Project {request.ProjectId} not found");
@@ -70,9 +58,9 @@ public sealed class CreateWorkItemCommandHandler : IRequestHandler<CreateWorkIte
             }
         }
 
-        var createdWorkItem = await _workItemRepository.CreateAsync(request.ProjectId, workItem, cancellationToken);
+        var createdWorkItem = await workItemRepository.CreateAsync(request.ProjectId, workItem, cancellationToken);
 
-        await _mediator.Publish(new WorkItemCreatedEvent
+        await mediator.Publish(new WorkItemCreatedEvent
         {
             ProjectId = request.ProjectId,
             WorkItemId = createdWorkItem.Id,

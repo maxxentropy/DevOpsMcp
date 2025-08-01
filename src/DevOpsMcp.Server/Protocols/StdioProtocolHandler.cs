@@ -1,35 +1,25 @@
 using System.IO;
 using DevOpsMcp.Server.Mcp;
+using System.Text.Json;
+using System.Text;
 
 namespace DevOpsMcp.Server.Protocols;
 
-public sealed class StdioProtocolHandler : IProtocolHandler, IMessageSender
+public sealed class StdioProtocolHandler(
+    IMessageHandler messageHandler,
+    ILogger<StdioProtocolHandler> logger)
+    : IProtocolHandler, IMessageSender
 {
-    private readonly IMessageHandler _messageHandler;
-    private readonly ILogger<StdioProtocolHandler> _logger;
-    private readonly JsonSerializerOptions _jsonOptions;
+    private readonly McpJsonSerializerContext _jsonContext = new();
     private readonly SemaphoreSlim _writeLock = new(1, 1);
     private CancellationTokenSource? _cancellationTokenSource;
     private Task? _readTask;
 
     public string Name => "stdio";
 
-    public StdioProtocolHandler(
-        IMessageHandler messageHandler,
-        ILogger<StdioProtocolHandler> logger)
-    {
-        _messageHandler = messageHandler;
-        _logger = logger;
-        _jsonOptions = new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-        };
-    }
-
     public Task StartAsync(CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Starting stdio protocol handler");
+        logger.LogInformation("Starting stdio protocol handler");
         
         _cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _readTask = ReadLoopAsync(_cancellationTokenSource.Token);
@@ -39,9 +29,9 @@ public sealed class StdioProtocolHandler : IProtocolHandler, IMessageSender
 
     public async Task StopAsync(CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Stopping stdio protocol handler");
+        logger.LogInformation("Stopping stdio protocol handler");
         
-        _cancellationTokenSource?.Cancel();
+        await (_cancellationTokenSource?.CancelAsync() ?? Task.CompletedTask);
         
         if (_readTask != null)
         {
@@ -51,7 +41,7 @@ public sealed class StdioProtocolHandler : IProtocolHandler, IMessageSender
             }
             catch (TimeoutException)
             {
-                _logger.LogWarning("Read loop did not complete within timeout");
+                logger.LogWarning("Read loop did not complete within timeout");
             }
         }
         
@@ -81,7 +71,7 @@ public sealed class StdioProtocolHandler : IProtocolHandler, IMessageSender
                 
                 if (line == null)
                 {
-                    _logger.LogInformation("Stdin closed, shutting down");
+                    logger.LogInformation("Stdin closed, shutting down");
                     break;
                 }
                 
@@ -106,7 +96,7 @@ public sealed class StdioProtocolHandler : IProtocolHandler, IMessageSender
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error reading from stdin");
+                logger.LogError(ex, "Error reading from stdin");
             }
         }
     }
@@ -122,26 +112,26 @@ public sealed class StdioProtocolHandler : IProtocolHandler, IMessageSender
             {
                 if (root.TryGetProperty("id", out _))
                 {
-                    var request = JsonSerializer.Deserialize<McpRequest>(json, _jsonOptions);
+                    var request = JsonSerializer.Deserialize(json, _jsonContext.McpRequest);
                     if (request != null)
                     {
-                        var response = await _messageHandler.HandleRequestAsync(request, cancellationToken);
+                        var response = await messageHandler.HandleRequestAsync(request, cancellationToken);
                         await SendResponseAsync(response, cancellationToken);
                     }
                 }
                 else
                 {
-                    var notification = JsonSerializer.Deserialize<McpNotification>(json, _jsonOptions);
+                    var notification = JsonSerializer.Deserialize(json, _jsonContext.McpNotification);
                     if (notification != null)
                     {
-                        await _messageHandler.HandleNotificationAsync(notification, cancellationToken);
+                        await messageHandler.HandleNotificationAsync(notification, cancellationToken);
                     }
                 }
             }
         }
         catch (JsonException ex)
         {
-            _logger.LogError(ex, "Invalid JSON received");
+            logger.LogError(ex, "Invalid JSON received");
             
             var errorResponse = new McpResponse
             {
@@ -158,7 +148,7 @@ public sealed class StdioProtocolHandler : IProtocolHandler, IMessageSender
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error processing message");
+            logger.LogError(ex, "Error processing message");
         }
     }
 
@@ -167,10 +157,17 @@ public sealed class StdioProtocolHandler : IProtocolHandler, IMessageSender
         await _writeLock.WaitAsync(cancellationToken);
         try
         {
-            var json = JsonSerializer.Serialize(message, _jsonOptions);
+            string json;
+            if (message is McpResponse response)
+                json = JsonSerializer.Serialize(response, _jsonContext.McpResponse);
+            else if (message is McpNotification notification)
+                json = JsonSerializer.Serialize(notification, _jsonContext.McpNotification);
+            else
+                json = JsonSerializer.Serialize(message, _jsonContext.Object);
+                
             await Console.Out.WriteLineAsync(json.AsMemory(), cancellationToken);
             await Console.Out.WriteLineAsync();
-            await Console.Out.FlushAsync();
+            await Console.Out.FlushAsync(cancellationToken);
         }
         finally
         {
