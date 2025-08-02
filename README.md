@@ -5,6 +5,7 @@ A production-ready Model Context Protocol (MCP) server providing comprehensive A
 ## Features
 
 - **Complete Azure DevOps API Coverage**: Projects, work items, builds, repositories, pull requests, test plans, and artifacts
+- **Eagle Scripting Integration**: Execute Eagle/Tcl scripts with security sandboxing and interpreter pooling
 - **Multi-Protocol Support**: SSE (Server-Sent Events), Standard I/O, and HTTP streaming
 - **Enterprise Security**: PAT, OAuth 2.0, and Azure AD authentication
 - **Real-time Updates**: Webhook support for live status updates
@@ -138,6 +139,10 @@ curl http://localhost:8080/debug/auth | jq
 | `AzureDevOps__PersonalAccessToken` | Personal Access Token | Required |
 | `AzureDevOps__AuthMethod` | Authentication method | `PersonalAccessToken` |
 | `AzureDevOps__EnableCaching` | Enable response caching | `true` |
+| `Eagle__MaxConcurrentExecutions` | Max concurrent Eagle script executions | `10` |
+| `Eagle__MinPoolSize` | Minimum Eagle interpreter pool size | `2` |
+| `Eagle__MaxPoolSize` | Maximum Eagle interpreter pool size | `10` |
+| `Eagle__SecurityPolicy__DefaultLevel` | Default security level for scripts | `Standard` |
 
 ### Authentication Methods
 
@@ -180,6 +185,13 @@ curl http://localhost:8080/debug/auth | jq
 - `review_pull_request` - Add comments and approve
 - `merge_pull_request` - Complete PR with policies
 - `get_commit_history` - Repository change tracking
+
+### Eagle Scripting
+- `execute_eagle_script` - Execute Eagle/Tcl scripts in a secure sandbox
+  - Configurable security levels (Minimal, Standard, Elevated, Maximum)
+  - Interpreter pooling for performance
+  - Variable injection support
+  - Execution metrics and timeout enforcement
 
 ## Development
 
