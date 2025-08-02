@@ -6,12 +6,14 @@ using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Moq;
+using System;
+using MediatR;
 
 namespace DevOpsMcp.Application.Tests.Personas.Orchestration;
 
-public class PersonaOrchestratorTests
+public sealed class PersonaOrchestratorTests : IDisposable
 {
-    private readonly ServiceProvider _serviceProvider;
+    private readonly Microsoft.Extensions.DependencyInjection.ServiceProvider _serviceProvider;
     private readonly PersonaOrchestrator _orchestrator;
     private readonly Mock<ILogger<PersonaOrchestrator>> _loggerMock;
 
@@ -25,6 +27,10 @@ public class PersonaOrchestratorTests
         services.AddTransient<ILogger<SiteReliabilityEngineerPersona>>(sp => Mock.Of<ILogger<SiteReliabilityEngineerPersona>>());
         services.AddTransient<ILogger<SecurityEngineerPersona>>(sp => Mock.Of<ILogger<SecurityEngineerPersona>>());
         services.AddTransient<ILogger<EngineeringManagerPersona>>(sp => Mock.Of<ILogger<EngineeringManagerPersona>>());
+        
+        // Add mocks for IPersonaMemoryManager and IMediator
+        services.AddSingleton<IPersonaMemoryManager>(Mock.Of<IPersonaMemoryManager>());
+        services.AddSingleton<IMediator>(Mock.Of<IMediator>());
         
         services.AddScoped<DevOpsEngineerPersona>();
         services.AddScoped<SiteReliabilityEngineerPersona>();
@@ -215,39 +221,47 @@ public class PersonaOrchestratorTests
                 Name = "Test User",
                 Role = "Developer",
                 ExperienceLevel = "Intermediate",
-                Experience = ExperienceLevel.Mid
+                Experience = ExperienceLevel.MidLevel
             },
-            Team = new TeamContext
+            Team = new TeamDynamics
             {
                 TeamSize = 10,
-                DevOpsMaturityLevel = "Intermediate"
+                TeamMaturity = "Intermediate"
             }
         };
     }
 
     private PersonaResponse CreatePersonaResponse(string personaId, string response, double confidence)
     {
-        return new PersonaResponse
+        var personaResponse = new PersonaResponse
         {
             ResponseId = Guid.NewGuid().ToString(),
             PersonaId = personaId,
             Response = response,
-            Confidence = new ResponseConfidence
+            Confidence = new PersonaConfidence
             {
                 Overall = confidence,
-                RelevanceScore = confidence,
-                AccuracyScore = confidence
-            },
-            SuggestedActions = new List<DevOpsAction>
-            {
-                new DevOpsAction
-                {
-                    Title = "Test Action",
-                    Description = "Test",
-                    Category = ActionCategory.Configuration,
-                    Priority = ActionPriority.Medium
-                }
+                DomainExpertise = confidence,
+                ContextRelevance = confidence,
+                ResponseQuality = confidence
             }
         };
+        
+        // Add suggested actions after creation since it's read-only
+        personaResponse.SuggestedActions.Add(new SuggestedAction
+        {
+            Title = "Test Action",
+            Description = "Test",
+            Category = "Configuration",
+            Priority = ActionPriority.Medium
+        });
+        
+        return personaResponse;
+    }
+
+    public void Dispose()
+    {
+        _serviceProvider?.Dispose();
+        GC.SuppressFinalize(this);
     }
 }

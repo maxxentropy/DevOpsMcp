@@ -21,6 +21,7 @@ public static class DependencyInjection
         // Protocol Handlers
         services.AddSingleton<StdioProtocolHandler>();
         services.AddSingleton<SseProtocolHandler>();
+        services.AddSingleton<StreamableHttpHandler>();
         services.AddSingleton<IProtocolHandler>(provider => provider.GetRequiredService<StdioProtocolHandler>());
         
         // Tools

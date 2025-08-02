@@ -15,6 +15,11 @@ public sealed class MessageHandler(
     };
     private readonly McpJsonSerializerContext _jsonContext = new();
 
+    public async Task<McpResponse> ProcessRequestAsync(McpRequest request)
+    {
+        return await HandleRequestAsync(request);
+    }
+
     public async Task<McpResponse> HandleRequestAsync(McpRequest request, CancellationToken cancellationToken = default)
     {
         logger.LogDebug("Handling request: {Method}", request.Method);
@@ -70,11 +75,13 @@ public sealed class MessageHandler(
 
         var response = new InitializeResponse
         {
-            ProtocolVersion = "2024-11-05",
+            ProtocolVersion = "2025-03-26",
             ServerInfo = _serverInfo,
             Capabilities = new ServerCapabilities
             {
                 Tools = new ToolsCapability { ListChanged = true },
+                Prompts = new PromptsCapability { ListChanged = false },
+                Resources = new ResourcesCapability { Subscribe = false, ListChanged = false },
                 Logging = new LoggingCapability 
                 { 
                     Levels = new List<string> { "debug", "info", "warning", "error" } 

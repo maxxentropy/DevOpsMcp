@@ -38,10 +38,18 @@ RUN addgroup -g 1000 -S appuser && \
 # Copy published app
 COPY --from=build --chown=appuser:appuser /app/publish .
 
+# Create directories for persona memory and logs
+RUN mkdir -p /app/data/PersonaMemory && \
+    chown -R appuser:appuser /app/data && \
+    chmod -R 755 /app/data
+
 # Set environment variables
 ENV ASPNETCORE_URLS=http://+:8080 \
     ASPNETCORE_ENVIRONMENT=Production \
-    DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false
+    DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false \
+    MCP__Protocol=http \
+    MCP__ENDPOINT=/mcp \
+    MCP__ENABLE_CORS=true
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

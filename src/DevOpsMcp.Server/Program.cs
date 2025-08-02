@@ -39,6 +39,9 @@ try
     builder.Services.AddInfrastructure(builder.Configuration);
     builder.Services.AddMcpServer();
     
+    // Add distributed cache (required by PersonaMemoryManager)
+    builder.Services.AddDistributedMemoryCache();
+    
     // Add persona services
     builder.Services.AddPersonaServices();
     
@@ -53,7 +56,8 @@ try
         .WithMetrics(metrics => metrics
             .AddAspNetCoreInstrumentation()
             .AddHttpClientInstrumentation()
-            .AddConsoleExporter());
+            .AddConsoleExporter()
+            .AddPrometheusExporter());
     
     // Add health checks
     builder.Services.AddHealthChecks();
@@ -61,21 +65,39 @@ try
     // Add API endpoints
     builder.Services.AddEndpointsApiExplorer();
     
+    // Add CORS support for Streamable HTTP
+    builder.Services.AddCors(options =>
+    {
+        options.AddDefaultPolicy(policy =>
+        {
+            policy.AllowAnyOrigin()
+                  .AllowAnyMethod()
+                  .AllowAnyHeader()
+                  .WithExposedHeaders("Mcp-Session-Id");
+        });
+    });
+    
     var app = builder.Build();
     
     // Configure pipeline
     
     app.UseSerilogRequestLogging();
+    app.UseCors(); // Enable CORS
     app.UseHealthChecks("/health");
+    app.UseOpenTelemetryPrometheusScrapingEndpoint(); // Add Prometheus metrics endpoint at /metrics
     
     // Map endpoints
     
-    // SSE endpoint
+    // Streamable HTTP endpoint (unified endpoint for both GET and POST)
+    app.MapMcp("/mcp");
+    
+    // Legacy SSE endpoint (for backward compatibility)
     app.MapGet("/sse", async (HttpContext context, SseProtocolHandler handler) =>
     {
         await handler.HandleConnectionAsync(context);
     });
     
+    // Legacy RPC endpoint (for backward compatibility)
     app.MapPost("/rpc", async (HttpContext context, SseProtocolHandler handler) =>
     {
         var request = await context.Request.ReadFromJsonAsync<McpRequest>();

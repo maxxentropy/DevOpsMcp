@@ -35,15 +35,7 @@ public static class DependencyInjection
         
         // Persona Infrastructure
         services.AddSingleton<IPersonaMemoryStore, FileBasedPersonaMemoryStore>();
-        services.Configure<PersonaMemoryStoreOptions>(options =>
-        {
-            options.BasePath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "DevOpsMcp",
-                "PersonaMemory"
-            );
-            options.MaxContextsPerPersona = 100;
-        });
+        services.Configure<PersonaMemoryStoreOptions>(configuration.GetSection("PersonaMemoryStore"));
         
         return services;
     }

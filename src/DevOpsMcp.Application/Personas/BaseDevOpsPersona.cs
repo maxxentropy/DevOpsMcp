@@ -351,4 +351,5 @@ public class RequestAnalysis
     public double Urgency { get; set; }
     public TaskCategory EstimatedCategory { get; set; }
     public Dictionary<string, string> Context { get; private set; } = new();
+    public double Confidence { get; set; }
 }

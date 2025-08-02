@@ -1,0 +1,3 @@
+  # Azure DevOps MCP Server Configuration
+  export AZURE_DEVOPS_ORG_URL="https://dev.azure.com/val-controls/"
+  export AZURE_DEVOPS_PAT="FdxSU487OtTEbKUyEK3aH5HBgQnDjrtFL9f9lzVzidq38GD8rbMKJQQ9BHACAAAAAtZiwtAAASAZDO3wzD"

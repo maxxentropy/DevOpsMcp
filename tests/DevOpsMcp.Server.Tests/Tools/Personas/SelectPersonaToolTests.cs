@@ -121,9 +121,9 @@ public class SelectPersonaToolTests
         {
             PrimaryPersonaId = "devops-engineer",
             Confidence = 0.8,
-            SecondaryPersonaIds = { "sre-specialist", "security-engineer" },
-            Confidence = 0.8
+            SelectionReason = "Multiple personas can contribute to this task"
         };
+        selectionResult.SecondaryPersonaIds.AddRange(new[] { "sre-specialist", "security-engineer" });
         selectionResult.PersonaScores["devops-engineer"] = 0.8;
         selectionResult.PersonaScores["sre-specialist"] = 0.75;
         selectionResult.PersonaScores["security-engineer"] = 0.65;

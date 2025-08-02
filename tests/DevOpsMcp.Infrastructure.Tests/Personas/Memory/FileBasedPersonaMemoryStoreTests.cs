@@ -5,10 +5,11 @@ using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
+using Xunit;
 
 namespace DevOpsMcp.Infrastructure.Tests.Personas.Memory;
 
-public class FileBasedPersonaMemoryStoreTests : IDisposable
+public sealed class FileBasedPersonaMemoryStoreTests : IDisposable
 {
     private readonly Mock<ILogger<FileBasedPersonaMemoryStore>> _loggerMock;
     private readonly string _testBasePath;
@@ -270,5 +271,6 @@ public class FileBasedPersonaMemoryStoreTests : IDisposable
         {
             Directory.Delete(_testBasePath, recursive: true);
         }
+        GC.SuppressFinalize(this);
     }
 }

@@ -4,18 +4,25 @@ using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
+using MediatR;
+using System;
+using System.Collections.Generic;
 
 namespace DevOpsMcp.Application.Tests.Personas;
 
 public class EngineeringManagerPersonaTests
 {
     private readonly Mock<ILogger<EngineeringManagerPersona>> _loggerMock;
+    private readonly Mock<IPersonaMemoryManager> _memoryManagerMock;
+    private readonly Mock<IMediator> _mediatorMock;
     private readonly EngineeringManagerPersona _persona;
 
     public EngineeringManagerPersonaTests()
     {
         _loggerMock = new Mock<ILogger<EngineeringManagerPersona>>();
-        _persona = new EngineeringManagerPersona(_loggerMock.Object);
+        _memoryManagerMock = new Mock<IPersonaMemoryManager>();
+        _mediatorMock = new Mock<IMediator>();
+        _persona = new EngineeringManagerPersona(_loggerMock.Object, _memoryManagerMock.Object, _mediatorMock.Object);
     }
 
     [Fact]
@@ -67,7 +74,8 @@ public class EngineeringManagerPersonaTests
     {
         // Arrange
         var context = CreateTestContext();
-        context.Team.CurrentChallenges = new List<string> { "slow deployments", "manual processes" };
+        // CurrentChallenges property removed from TeamDynamics
+        // context.Team.CurrentChallenges = new List<string> { "slow deployments", "manual processes" };
         var request = "Our deployment process is too slow and error-prone";
 
         // Act
@@ -78,7 +86,7 @@ public class EngineeringManagerPersonaTests
         response.Response.Should().Contain("process");
         response.Context.Should().ContainKey("process_improvements");
         response.Context.Should().ContainKey("automation_opportunities");
-        response.SuggestedActions.Should().Contain(a => a.Category == ActionCategory.Process);
+        response.SuggestedActions.Should().Contain(a => a.Category == "Process");
     }
 
     [Fact]
@@ -106,14 +114,13 @@ public class EngineeringManagerPersonaTests
         // Arrange
         var task = new DevOpsTask
         {
-            Type = "team_planning",
-            Category = "management",
-            Context = new Dictionary<string, object>
-            {
-                ["scope"] = "quarterly planning",
-                ["team_size"] = 20
-            }
+            Title = "Team Planning",
+            Description = "Quarterly planning for the team",
+            Category = TaskCategory.Planning,
+            Complexity = TaskComplexity.Complex
         };
+        task.Parameters["scope"] = "quarterly planning";
+        task.Parameters["team_size"] = 20;
 
         // Act
         var score = await _persona.CalculateRoleAlignmentAsync(task);
@@ -128,9 +135,10 @@ public class EngineeringManagerPersonaTests
         // Arrange
         var task = new DevOpsTask
         {
-            Type = "code_implementation",
-            Category = "development",
-            Context = new Dictionary<string, object>()
+            Title = "Code Implementation",
+            Description = "Implement new feature",
+            Category = TaskCategory.Automation,
+            Complexity = TaskComplexity.Moderate
         };
 
         // Act
@@ -146,7 +154,8 @@ public class EngineeringManagerPersonaTests
         // Arrange
         var context = CreateTestContext();
         context.Team.TeamSize = 25;
-        context.Team.SkillGaps = new List<string> { "cloud architecture", "security" };
+        // SkillGaps property removed from TeamDynamics
+        // context.Team.SkillGaps = new List<string> { "cloud architecture", "security" };
         var request = "How should I structure my team for our cloud migration?";
 
         // Act
@@ -187,12 +196,14 @@ public class EngineeringManagerPersonaTests
             Id = "tech-lead",
             Role = "Technical Lead",
             ExperienceLevel = "Expert",
-            Experience = ExperienceLevel.Expert
+            Experience = ExperienceLevel.Principal
         };
         var projectContext = new ProjectContext
         {
             ProjectId = "technical-project",
-            TechnicalComplexity = "high"
+            Stage = "Production"
+            // TechnicalComplexity property not available on ProjectContext
+            // TechnicalComplexity = "high"
         };
 
         // Act
@@ -200,7 +211,8 @@ public class EngineeringManagerPersonaTests
 
         // Assert
         _persona.Configuration.TechnicalDepth.Should().Be(TechnicalDepth.Advanced);
-        _persona.Configuration.IncludeImplementationDetails.Should().BeTrue();
+        // IncludeImplementationDetails property removed from PersonaConfiguration
+        // _persona.Configuration.IncludeImplementationDetails.Should().BeTrue();
     }
 
     [Fact]
@@ -219,7 +231,8 @@ public class EngineeringManagerPersonaTests
         response.Context.Should().ContainKey("risk_matrix");
         response.Context.Should().ContainKey("mitigation_strategies");
         response.Context.Should().ContainKey("decision_framework");
-        response.Metadata.RequiresFollowUp.Should().BeTrue();
+        // RequiresFollowUp property removed from ResponseMetadata
+        // response.Metadata.RequiresFollowUp.Should().BeTrue();
     }
 
     [Fact]
@@ -227,7 +240,8 @@ public class EngineeringManagerPersonaTests
     {
         // Arrange
         var context = CreateTestContext();
-        context.Team.CultureChallenges = new List<string> { "silos", "resistance to change" };
+        // CultureChallenges property removed from TeamDynamics
+        // context.Team.CultureChallenges = new List<string> { "silos", "resistance to change" };
         var request = "How can we build a strong DevOps culture?";
 
         // Act
@@ -239,7 +253,7 @@ public class EngineeringManagerPersonaTests
         response.Context.Should().ContainKey("culture_initiatives");
         response.Context.Should().ContainKey("change_management");
         response.Context.Should().ContainKey("success_metrics");
-        response.SuggestedActions.Any(a => a.Category == ActionCategory.Process).Should().BeTrue();
+        response.SuggestedActions.Any(a => a.Category == "Process").Should().BeTrue();
     }
 
     [Fact]
@@ -269,27 +283,19 @@ public class EngineeringManagerPersonaTests
             {
                 ProjectId = "test-project",
                 Name = "Enterprise Platform",
-                Stage = "Growth",
-                TechnologyStack = new TechnologyConfiguration
-                {
-                    Languages = { "Java", "Python", "Go" },
-                    Frameworks = { "Spring Boot", "Kubernetes", "Terraform" },
-                    CloudProviders = { "AWS", "Azure" },
-                    Tools = { "Jenkins", "GitLab", "Datadog" }
-                },
-                Budget = 1000000,
-                Timeline = "12 months"
+                Stage = "Growth"
+                // Properties not available on ProjectMetadata:
+                // TechnologyStack - this belongs on ProjectContext
+                // Budget
+                // Timeline
             },
             Environment = new EnvironmentContext
             {
                 EnvironmentType = "Enterprise",
-                IsProduction = false,
-                Region = "global",
-                Resources = new Dictionary<string, object>
-                {
-                    ["team_size"] = 50,
-                    ["environments"] = new[] { "dev", "staging", "prod" }
-                }
+                IsProduction = false
+                // Properties not available:
+                // Region - use Regions list instead
+                // Resources is read-only
             },
             User = new UserProfile
             {
@@ -297,19 +303,21 @@ public class EngineeringManagerPersonaTests
                 Name = "Manager User",
                 Role = "Engineering Manager",
                 ExperienceLevel = "Expert",
-                Experience = ExperienceLevel.Expert,
-                PreferredCommunicationStyle = PreferredCommunicationStyle.Strategic,
-                ManagementLevel = "senior"
+                Experience = ExperienceLevel.Principal
+                // Properties not available:
+                // PreferredCommunicationStyle
+                // ManagementLevel
             },
-            Team = new TeamContext
+            Team = new TeamDynamics
             {
                 TeamSize = 30,
-                DevOpsMaturityLevel = "Intermediate",
-                ReportingStructure = "matrix",
-                Locations = new List<string> { "US", "EU", "APAC" },
-                CurrentChallenges = new List<string>(),
-                SkillGaps = new List<string>(),
-                CultureChallenges = new List<string>()
+                TeamMaturity = "Intermediate",
+                // ReportingStructure = "matrix", // Property doesn't exist
+                // Locations = new List<string> { "US", "EU", "APAC" }, // Property doesn't exist
+                // Properties removed from TeamDynamics:
+                // CurrentChallenges = new List<string>(),
+                // SkillGaps = new List<string>(),  
+                // CultureChallenges = new List<string>()
             }
         };
     }

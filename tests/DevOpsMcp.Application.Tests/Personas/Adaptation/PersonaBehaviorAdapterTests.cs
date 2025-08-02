@@ -71,7 +71,7 @@ public class PersonaBehaviorAdapterTests
         {
             CommunicationStyle = CommunicationStyle.Collaborative,
             TechnicalDepth = TechnicalDepth.Advanced,
-            ResponseDetailLevel = DetailLevel.Comprehensive
+            ResponseFormat = ResponseFormat.Detailed
         };
         var preferences = new UserPreferences
         {
@@ -180,6 +180,13 @@ public class PersonaBehaviorAdapterTests
 
         // Assert
         adjustment.Reasons.Should().Contain(r => r.Contains("communication style"));
+        adjustment.SuggestedCommunicationStyle.Should().Be(
+            expectedStyle == PreferredCommunicationStyle.Concise ? CommunicationStyle.Concise :
+            expectedStyle == PreferredCommunicationStyle.Detailed ? CommunicationStyle.Collaborative :
+            expectedStyle == PreferredCommunicationStyle.StepByStep ? CommunicationStyle.Mentoring :
+            expectedStyle == PreferredCommunicationStyle.Practical ? CommunicationStyle.TechnicalPrecise :
+            CommunicationStyle.Collaborative
+        );
     }
 
     private InteractionHistory CreateInteractionHistory(int count, bool positive = false)

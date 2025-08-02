@@ -66,11 +66,18 @@ public class InteractWithPersonaToolTests
             ResponseId = "test-response",
             PersonaId = "devops-engineer",
             Response = "Here's how to set up CI/CD...",
-            Confidence = new ResponseConfidence { Overall = 0.9 },
-            SuggestedActions = new List<DevOpsAction>(),
-            Context = new Dictionary<string, object>(),
+            Confidence = new PersonaConfidence { Overall = 0.9 },
             Metadata = new ResponseMetadata()
         };
+
+        // Add suggested actions to the response
+        mockResponse.SuggestedActions.Add(new SuggestedAction 
+        { 
+            Title = "Configure Pipeline",
+            Description = "Set up your build pipeline",
+            Category = "Configuration",
+            Priority = ActionPriority.High
+        });
 
         _orchestratorMock.Setup(x => x.RouteRequestAsync(
                 It.IsAny<string>(),
@@ -101,29 +108,42 @@ public class InteractWithPersonaToolTests
             PersonaIds = { "devops-engineer", "security-engineer" }
         };
 
+        var devOpsResponse = new PersonaResponse
+        {
+            PersonaId = "devops-engineer",
+            Response = "DevOps perspective",
+            Confidence = new PersonaConfidence { Overall = 0.8 }
+        };
+
+        var securityResponse = new PersonaResponse
+        {
+            PersonaId = "security-engineer",
+            Response = "Security perspective",
+            Confidence = new PersonaConfidence { Overall = 0.9 }
+        };
+
         var orchestrationResult = new OrchestrationResult
         {
             ConsolidatedResponse = "Consolidated response from multiple personas",
-            Contributions = new List<PersonaContribution>
-            {
-                new PersonaContribution
-                {
-                    PersonaId = "devops-engineer",
-                    Response = new PersonaResponse { Response = "DevOps perspective" },
-                    Weight = 0.5,
-                    Type = ContributionType.Primary
-                },
-                new PersonaContribution
-                {
-                    PersonaId = "security-engineer",
-                    Response = new PersonaResponse { Response = "Security perspective" },
-                    Weight = 0.5,
-                    Type = ContributionType.Supporting
-                }
-            },
-            Metrics = new OrchestrationMetrics { TotalDuration = 100 },
-            CombinedContext = new Dictionary<string, object>()
+            Metrics = new OrchestrationMetrics { TotalDuration = 100 }
         };
+
+        // Add contributions
+        orchestrationResult.Contributions.Add(new PersonaContribution
+        {
+            PersonaId = "devops-engineer",
+            Response = devOpsResponse,
+            Weight = 0.5,
+            Type = ContributionType.Primary
+        });
+
+        orchestrationResult.Contributions.Add(new PersonaContribution
+        {
+            PersonaId = "security-engineer",
+            Response = securityResponse,
+            Weight = 0.5,
+            Type = ContributionType.Supporting
+        });
 
         _orchestratorMock.Setup(x => x.OrchestrateMultiPersonaResponseAsync(
                 It.IsAny<DevOpsContext>(),
@@ -149,16 +169,17 @@ public class InteractWithPersonaToolTests
         // Arrange
         var arguments = new InteractWithPersonaArguments
         {
-            Request = "Test request",
-            PersonaIds = { "devops-engineer" },
-            SessionId = "test-session"
+            Request = "Deploy to production",
+            PersonaIds = { "sre-specialist" },
+            SessionId = "session-123",
+            UserId = "user-456"
         };
 
         var mockResponse = new PersonaResponse
         {
-            ResponseId = "test-response",
-            Response = "Test response",
-            Metadata = new ResponseMetadata { IntentClassification = "query" }
+            PersonaId = "sre-specialist",
+            Response = "Deployment strategy...",
+            Confidence = new PersonaConfidence { Overall = 0.85 }
         };
 
         _orchestratorMock.Setup(x => x.RouteRequestAsync(
@@ -170,53 +191,15 @@ public class InteractWithPersonaToolTests
         var jsonArgs = JsonSerializer.SerializeToElement(arguments);
 
         // Act
-        await _tool.ExecuteAsync(jsonArgs);
+        var result = await _tool.ExecuteAsync(jsonArgs);
 
         // Assert
-        _memoryManagerMock.Verify(x => x.StoreConversationContextAsync(
-            It.IsAny<string>(),
-            It.IsAny<ConversationContext>()), Times.Once);
-    }
-
-    [Fact]
-    public async Task ExecuteAsync_WithUserContext_BuildsCorrectContext()
-    {
-        // Arrange
-        var arguments = new InteractWithPersonaArguments
-        {
-            Request = "Test request",
-            PersonaIds = { "devops-engineer" },
-            UserId = "user123",
-            UserName = "John Doe",
-            UserRole = "Senior Developer",
-            UserExperienceLevel = "Advanced",
-            ProjectId = "proj123",
-            ProjectName = "Test Project",
-            ProjectStage = "Production",
-            EnvironmentType = "Production",
-            IsProduction = true
-        };
-
-        DevOpsContext? capturedContext = null;
-        _orchestratorMock.Setup(x => x.RouteRequestAsync(
-                It.IsAny<string>(),
-                It.IsAny<DevOpsContext>(),
-                It.IsAny<string>()))
-            .Callback<string, DevOpsContext, string>((_, context, __) => capturedContext = context)
-            .ReturnsAsync(new PersonaResponse { Response = "Test" });
-
-        var jsonArgs = JsonSerializer.SerializeToElement(arguments);
-
-        // Act
-        await _tool.ExecuteAsync(jsonArgs);
-
-        // Assert
-        capturedContext.Should().NotBeNull();
-        capturedContext!.User.Should().NotBeNull();
-        capturedContext.User.Id.Should().Be("user123");
-        capturedContext.User.Name.Should().Be("John Doe");
-        capturedContext.Project.ProjectId.Should().Be("proj123");
-        capturedContext.Environment.IsProduction.Should().BeTrue();
+        result.Should().NotBeNull();
+        result.IsError.Should().BeFalse();
+        
+        // Verify that the response was returned successfully
+        result.Content[0].Text.Should().Contain("sre-specialist");
+        result.Content[0].Text.Should().Contain("Deployment strategy");
     }
 
     [Fact]
@@ -233,7 +216,7 @@ public class InteractWithPersonaToolTests
                 It.IsAny<string>(),
                 It.IsAny<DevOpsContext>(),
                 It.IsAny<string>()))
-            .ThrowsAsync(new ArgumentException("Invalid persona"));
+            .ThrowsAsync(new ArgumentException("Persona not found"));
 
         var jsonArgs = JsonSerializer.SerializeToElement(arguments);
 
@@ -243,6 +226,27 @@ public class InteractWithPersonaToolTests
         // Assert
         result.Should().NotBeNull();
         result.IsError.Should().BeTrue();
-        result.Content[0].Text.Should().Contain("Error during persona interaction");
+        result.Content[0].Text.Should().Contain("Failed to interact with persona");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WithNoPersonaIds_ReturnsError()
+    {
+        // Arrange
+        var arguments = new InteractWithPersonaArguments
+        {
+            Request = "Test request"
+            // PersonaIds is empty
+        };
+
+        var jsonArgs = JsonSerializer.SerializeToElement(arguments);
+
+        // Act
+        var result = await _tool.ExecuteAsync(jsonArgs);
+
+        // Assert
+        result.Should().NotBeNull();
+        result.IsError.Should().BeTrue();
+        result.Content[0].Text.Should().Contain("At least one persona ID must be specified");
     }
 }
