@@ -6,6 +6,7 @@ using DevOpsMcp.Server.Tools;
 using DevOpsMcp.Server.Tools.Projects;
 using DevOpsMcp.Server.Tools.WorkItems;
 using DevOpsMcp.Server.Tools.Personas;
+using DevOpsMcp.Server.Tools.Eagle;
 
 namespace DevOpsMcp.Server;
 
@@ -37,6 +38,9 @@ public static class DependencyInjection
         services.AddTransient<GetPersonaStatusTool>();
         services.AddTransient<ManagePersonaMemoryTool>();
         services.AddTransient<ConfigurePersonaBehaviorTool>();
+        
+        // Eagle Tools
+        services.AddTransient<EagleExecutionTool>();
         
         // Register tools with the registry
         services.AddHostedService<ToolRegistrationService>();
@@ -70,6 +74,9 @@ internal sealed class ToolRegistrationService(
         toolRegistry.RegisterTool(serviceProvider.GetRequiredService<GetPersonaStatusTool>());
         toolRegistry.RegisterTool(serviceProvider.GetRequiredService<ManagePersonaMemoryTool>());
         toolRegistry.RegisterTool(serviceProvider.GetRequiredService<ConfigurePersonaBehaviorTool>());
+        
+        // Eagle tools
+        toolRegistry.RegisterTool(serviceProvider.GetRequiredService<EagleExecutionTool>());
         
         logger.LogInformation("Tool registration completed");
         

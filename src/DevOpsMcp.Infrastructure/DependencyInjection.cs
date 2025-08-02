@@ -1,8 +1,10 @@
 using System;
 using System.IO;
 using DevOpsMcp.Application.Personas.Memory;
+using DevOpsMcp.Domain.Interfaces;
 using DevOpsMcp.Infrastructure.Authentication;
 using DevOpsMcp.Infrastructure.Configuration;
+using DevOpsMcp.Infrastructure.Eagle;
 using DevOpsMcp.Infrastructure.Personas.Memory;
 using DevOpsMcp.Infrastructure.Repositories;
 using DevOpsMcp.Infrastructure.Services;
@@ -22,6 +24,7 @@ public static class DependencyInjection
     {
         // Configuration
         services.Configure<AzureDevOpsOptions>(configuration.GetSection(AzureDevOpsOptions.SectionName));
+        services.Configure<EagleOptions>(configuration.GetSection(EagleOptions.SectionName));
         
         // Azure DevOps Client Factory - Use factory delegate to ensure proper configuration binding
         services.AddSingleton<IAzureDevOpsClientFactory>(provider =>
@@ -61,6 +64,9 @@ public static class DependencyInjection
         // Persona Infrastructure
         services.AddSingleton<IPersonaMemoryStore, FileBasedPersonaMemoryStore>();
         services.Configure<PersonaMemoryStoreOptions>(configuration.GetSection("PersonaMemoryStore"));
+        
+        // Eagle Script Executor
+        services.AddSingleton<IEagleScriptExecutor, EagleScriptExecutor>();
         
         return services;
     }
