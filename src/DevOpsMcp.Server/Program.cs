@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -13,6 +15,11 @@ using DevOpsMcp.Server.Protocols;
 using DevOpsMcp.Server.Mcp;
 using DevOpsMcp.Application;
 using DevOpsMcp.Infrastructure;
+using DevOpsMcp.Infrastructure.Configuration;
+using DevOpsMcp.Infrastructure.Services;
+using System;
+using System.Linq;
+using System.Threading.Tasks;
 
 // Configure Serilog
 Log.Logger = new LoggerConfiguration()
@@ -30,6 +37,9 @@ try
     Log.Information("Starting DevOps MCP Server");
     
     var builder = WebApplication.CreateBuilder(args);
+    
+    // Explicitly add environment variables to configuration
+    builder.Configuration.AddEnvironmentVariables();
     
     // Add Serilog
     builder.Host.UseSerilog();
@@ -79,6 +89,30 @@ try
     
     var app = builder.Build();
     
+    // Test Azure DevOps connection on startup
+    using (var scope = app.Services.CreateScope())
+    {
+        try
+        {
+            var clientFactory = scope.ServiceProvider.GetRequiredService<IAzureDevOpsClientFactory>();
+            var options = scope.ServiceProvider.GetRequiredService<IOptions<AzureDevOpsOptions>>();
+            
+            Log.Information("Testing Azure DevOps connection to {Organization}", 
+                new Uri(options.Value.OrganizationUrl).Host);
+            
+            // Try to create a client to validate the connection
+            var projectClient = clientFactory.CreateProjectClient();
+            
+            Log.Information("Successfully initialized Azure DevOps client factory");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to initialize Azure DevOps connection. Check your AZURE_DEVOPS_ORG_URL and AZURE_DEVOPS_PAT environment variables.");
+            // Don't throw - allow server to start for debugging
+            Log.Warning("Server starting in degraded mode - Azure DevOps connection failed");
+        }
+    }
+    
     // Configure pipeline
     
     app.UseSerilogRequestLogging();
@@ -87,6 +121,34 @@ try
     app.UseOpenTelemetryPrometheusScrapingEndpoint(); // Add Prometheus metrics endpoint at /metrics
     
     // Map endpoints
+    
+    // Authentication diagnostics endpoint
+    app.MapGet("/debug/auth", (IConfiguration configuration, IOptions<AzureDevOpsOptions> options, ILogger<Program> logger) =>
+    {
+        var diagnostics = new
+        {
+            Configuration = new
+            {
+                OrganizationUrl = options.Value.OrganizationUrl ?? "NOT SET",
+                HasPersonalAccessToken = !string.IsNullOrEmpty(options.Value.PersonalAccessToken),
+                AuthMethod = options.Value.AuthMethod.ToString()
+            },
+            EnvironmentVariables = new
+            {
+                AZURE_DEVOPS_ORG_URL = Environment.GetEnvironmentVariable("AZURE_DEVOPS_ORG_URL") ?? "NOT SET",
+                HasAZURE_DEVOPS_PAT = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("AZURE_DEVOPS_PAT")),
+                AzureDevOps__OrganizationUrl = Environment.GetEnvironmentVariable("AzureDevOps__OrganizationUrl") ?? "NOT SET",
+                HasAzureDevOps__PersonalAccessToken = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("AzureDevOps__PersonalAccessToken"))
+            },
+            ConfigurationSources = configuration.AsEnumerable()
+                .Where(kvp => kvp.Key.StartsWith("AzureDevOps", StringComparison.OrdinalIgnoreCase))
+                .Select(kvp => new { Key = kvp.Key, HasValue = !string.IsNullOrEmpty(kvp.Value) })
+                .ToList()
+        };
+        
+        logger.LogInformation("Authentication diagnostics requested: {@Diagnostics}", diagnostics);
+        return Results.Ok(diagnostics);
+    });
     
     // Streamable HTTP endpoint (unified endpoint for both GET and POST)
     app.MapMcp("/mcp");

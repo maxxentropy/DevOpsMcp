@@ -6,6 +6,13 @@ using DevOpsMcp.Infrastructure.Configuration;
 using DevOpsMcp.Infrastructure.Personas.Memory;
 using DevOpsMcp.Infrastructure.Repositories;
 using DevOpsMcp.Infrastructure.Services;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Polly;
+using Polly.Extensions.Http;
+using System.Net.Http;
 
 namespace DevOpsMcp.Infrastructure;
 
@@ -16,10 +23,28 @@ public static class DependencyInjection
         // Configuration
         services.Configure<AzureDevOpsOptions>(configuration.GetSection(AzureDevOpsOptions.SectionName));
         
-        // Azure DevOps Client Factory
+        // Azure DevOps Client Factory - Use factory delegate to ensure proper configuration binding
         services.AddSingleton<IAzureDevOpsClientFactory>(provider =>
         {
             var options = provider.GetRequiredService<IOptions<AzureDevOpsOptions>>();
+            var logger = provider.GetRequiredService<ILogger<AzureDevOpsClientFactory>>();
+            
+            // Validate configuration
+            if (string.IsNullOrEmpty(options.Value.OrganizationUrl))
+            {
+                logger.LogError("Azure DevOps OrganizationUrl is not configured. Please set AZURE_DEVOPS_ORG_URL environment variable.");
+                throw new System.InvalidOperationException("Azure DevOps OrganizationUrl is required");
+            }
+            
+            if (string.IsNullOrEmpty(options.Value.PersonalAccessToken))
+            {
+                logger.LogError("Azure DevOps PersonalAccessToken is not configured. Please set AZURE_DEVOPS_PAT environment variable.");
+                throw new System.InvalidOperationException("Azure DevOps PersonalAccessToken is required");
+            }
+            
+            logger.LogInformation("Initializing Azure DevOps client factory with organization: {Organization}", 
+                new Uri(options.Value.OrganizationUrl).Host);
+            
             return new AzureDevOpsClientFactory(options.Value.OrganizationUrl, options.Value.PersonalAccessToken);
         });
         

@@ -5,17 +5,37 @@ using Microsoft.TeamFoundation.WorkItemTracking.WebApi;
 using Microsoft.VisualStudio.Services.Common;
 using Microsoft.VisualStudio.Services.ReleaseManagement.WebApi.Clients;
 using Microsoft.VisualStudio.Services.WebApi;
+using System;
+using System.Threading.Tasks;
 
 namespace DevOpsMcp.Infrastructure.Services;
 
 public class AzureDevOpsClientFactory : IAzureDevOpsClientFactory
 {
     private readonly VssConnection _connection;
+    private readonly string _organizationUrl;
+    private bool _isInitialized;
 
     public AzureDevOpsClientFactory(string organizationUrl, string personalAccessToken)
     {
+        if (string.IsNullOrWhiteSpace(organizationUrl))
+            throw new ArgumentNullException(nameof(organizationUrl));
+        
+        if (string.IsNullOrWhiteSpace(personalAccessToken))
+            throw new ArgumentNullException(nameof(personalAccessToken));
+        
+        _organizationUrl = organizationUrl;
         var credentials = new VssBasicCredential(string.Empty, personalAccessToken);
         _connection = new VssConnection(new Uri(organizationUrl), credentials);
+    }
+    
+    private async Task EnsureConnectionAsync()
+    {
+        if (!_isInitialized)
+        {
+            await _connection.ConnectAsync();
+            _isInitialized = true;
+        }
     }
 
     public ProjectHttpClient CreateProjectClient()
