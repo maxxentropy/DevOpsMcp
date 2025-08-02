@@ -68,14 +68,21 @@ public sealed class EagleScriptExecutor : IEagleScriptExecutor, IDisposable
             // Setup execution context
             await SetupInterpreterContextAsync(interpreter, context);
             
-            // Execute script
+            // Execute script with output capture
             var compilationStopwatch = Stopwatch.StartNew();
             global::Eagle._Components.Public.Result? eagleResult = null;
             int errorLine = 0;
+            var outputCapture = new EagleOutputCapture();
+            
+            // Wrap the script to capture puts output
+            var wrappedScript = WrapScriptForOutputCapture(context.Script);
             
             var returnCode = await Task.Run(() => 
-                interpreter.EvaluateScript(context.Script, ref eagleResult, ref errorLine), 
+                interpreter.EvaluateScript(wrappedScript, ref eagleResult, ref errorLine), 
                 cts.Token);
+            
+            // Get captured output
+            var capturedOutput = await GetCapturedOutputAsync(interpreter);
             compilationStopwatch.Stop();
             
             stopwatch.Stop();
@@ -90,11 +97,16 @@ public sealed class EagleScriptExecutor : IEagleScriptExecutor, IDisposable
                 SecurityChecksPerformed = 0 // TODO: Track security checks
             };
             
+            // Combine captured output with result
+            var finalResult = !string.IsNullOrEmpty(capturedOutput) 
+                ? capturedOutput 
+                : eagleResult?.ToString();
+            
             return new EagleExecutionResult
             {
                 ExecutionId = executionId,
                 IsSuccess = returnCode == ReturnCode.Ok,
-                Result = eagleResult?.ToString(),
+                Result = finalResult,
                 ErrorMessage = returnCode != ReturnCode.Ok ? eagleResult?.ToString() : null,
                 StartTimeUtc = startTime,
                 EndTimeUtc = DateTime.UtcNow,
@@ -329,6 +341,87 @@ public sealed class EagleScriptExecutor : IEagleScriptExecutor, IDisposable
     {
         // TODO: Get actual command count from interpreter
         return 0;
+    }
+
+    private string WrapScriptForOutputCapture(string script)
+    {
+        // Escape the script for embedding
+        var escapedScript = script.Replace("\\", "\\\\").Replace("\"", "\\\"");
+        
+        // Create a wrapper that captures all output
+        return @"
+# Initialize output capture variable
+set ::_eagle_output """"
+
+# Override puts to capture output
+rename puts ::_original_puts
+proc puts {args} {
+    if {[llength $args] == 0} {
+        append ::_eagle_output ""\n""
+    } elseif {[llength $args] == 1} {
+        append ::_eagle_output [lindex $args 0]\n
+    } else {
+        # Handle -nonewline option
+        if {[lindex $args 0] eq ""-nonewline""} {
+            append ::_eagle_output [lindex $args 1]
+        } else {
+            append ::_eagle_output [join $args "" ""]\n
+        }
+    }
+}
+
+# Execute the user script
+set ::_eagle_script_result [catch {
+    eval """ + escapedScript + @"""
+} ::_eagle_script_error]
+
+# Restore original puts
+rename puts """"
+rename ::_original_puts puts
+
+# Return the result or error
+if {$::_eagle_script_result == 0} {
+    # If there's captured output, return it; otherwise return the last result
+    if {[string length $::_eagle_output] > 0} {
+        string trimright $::_eagle_output
+    } else {
+        set ::_eagle_script_error
+    }
+} else {
+    error $::_eagle_script_error
+}";
+    }
+
+    private async Task<string> GetCapturedOutputAsync(Interpreter interpreter)
+    {
+        try
+        {
+            // Try to get the captured output variable
+            global::Eagle._Components.Public.Result? outputResult = null;
+            int errorLine = 0;
+            
+            var code = await Task.Run(() =>
+                interpreter.EvaluateScript("info exists ::_eagle_output", ref outputResult, ref errorLine));
+            
+            if (code == ReturnCode.Ok && outputResult?.ToString() == "1")
+            {
+                // Variable exists, get its value
+                outputResult = null;
+                code = await Task.Run(() =>
+                    interpreter.EvaluateScript("set ::_eagle_output", ref outputResult, ref errorLine));
+                
+                if (code == ReturnCode.Ok)
+                {
+                    return outputResult?.ToString() ?? string.Empty;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed to get captured output");
+        }
+        
+        return string.Empty;
     }
 
     public void Dispose()
