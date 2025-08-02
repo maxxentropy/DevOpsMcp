@@ -9,7 +9,7 @@ services:
       - "8080:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - MCP__Protocol=sse
+      - MCP__Protocol=http
       - AzureDevOps__OrganizationUrl=${AZURE_DEVOPS_ORG_URL}
       - AzureDevOps__PersonalAccessToken=${AZURE_DEVOPS_PAT}
       - AzureDevOps__AuthMethod=PersonalAccessToken
