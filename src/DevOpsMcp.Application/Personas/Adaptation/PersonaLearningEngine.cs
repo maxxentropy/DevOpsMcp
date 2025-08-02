@@ -513,7 +513,7 @@ public class PersonaLearningEngine : IPersonaLearningEngine
         };
 
         // Calculate category effectiveness from model data
-        foreach (TaskCategory category in Enum.GetValues(typeof(TaskCategory)))
+        foreach (TaskCategory category in Enum.GetValues<TaskCategory>())
         {
             var key = $"category_{category}";
             if (model.Weights.TryGetValue(key, out var score))
