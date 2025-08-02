@@ -63,10 +63,68 @@ docker run -e AzureDevOps__PersonalAccessToken=YOUR_PAT \
 
 ### Running with Docker Compose
 
+1. Copy the example environment file:
 ```bash
-export AZURE_DEVOPS_ORG_URL=https://dev.azure.com/your-org
-export AZURE_DEVOPS_PAT=your-pat
+cp .env.example .env
+```
+
+2. Edit `.env` with your Azure DevOps credentials:
+```bash
+# Your Azure DevOps organization URL
+AZURE_DEVOPS_ORG_URL=https://dev.azure.com/your-organization
+
+# Your Personal Access Token
+AZURE_DEVOPS_PAT=your-personal-access-token-here
+```
+
+3. Start the services:
+```bash
 docker-compose up -d
+```
+
+### Authentication Setup
+
+#### Creating a Personal Access Token (PAT)
+
+1. Navigate to https://dev.azure.com/{your-organization}/_usersSettings/tokens
+2. Click "New Token"
+3. Configure the token:
+   - **Name**: DevOps MCP Server
+   - **Expiration**: Set as needed (recommend 90 days)
+   - **Scopes**: Select the following:
+     - Work Items (Read & Write)
+     - Code (Read)
+     - Build (Read)
+     - Release (Read)
+     - Project and Team (Read)
+4. Click "Create" and copy the token immediately
+
+#### Environment Variable Configuration
+
+The server accepts environment variables in two formats:
+
+**For Docker/Docker Compose (.env file):**
+```bash
+AZURE_DEVOPS_ORG_URL=https://dev.azure.com/your-organization
+AZURE_DEVOPS_PAT=your-pat-token
+```
+
+**For ASP.NET Core (appsettings.json or environment):**
+```bash
+AzureDevOps__OrganizationUrl=https://dev.azure.com/your-organization
+AzureDevOps__PersonalAccessToken=your-pat-token
+```
+
+#### Testing Authentication
+
+Use the included test script to verify your authentication:
+```bash
+./test-auth.sh
+```
+
+Or access the diagnostics endpoint:
+```bash
+curl http://localhost:8080/debug/auth | jq
 ```
 
 ## Configuration
