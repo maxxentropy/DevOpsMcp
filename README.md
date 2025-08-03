@@ -259,6 +259,7 @@ curl http://localhost:8080/debug/auth | jq
   - Interpreter pooling for performance
   - Variable injection support
   - Execution metrics and timeout enforcement
+  - **[See Eagle Transformation Blueprint](docs/EAGLE_TRANSFORMATION_BLUEPRINT.md)** for the revolutionary roadmap
 
 ### Email Management
 - `send_email` - Send templated emails via AWS SES

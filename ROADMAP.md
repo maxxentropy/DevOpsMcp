@@ -43,9 +43,77 @@
 - [x] Behavior adaptation framework
 - [x] MCP tool integration
 
-## Version 1.2.0 (Q3 2025)
+## Version 1.2.0 - Eagle Transformation Phase 1 (Q3 2025 - Weeks 1-4)
 
-### Email Enhancements
+### Phase 1: Enhanced Eagle Core
+- [ ] **Rich Context Injection** (Weeks 1-2)
+  - [ ] EagleContextProvider implementation
+  - [ ] mcp::context command for full DevOps context access
+  - [ ] mcp::session for persistent state management
+  - [ ] mcp::call_tool for inter-tool communication
+- [ ] **Structured Output Processing** (Weeks 3-4)
+  - [ ] EagleOutputProcessor for Tcl dict → JSON conversion
+  - [ ] Support for structured responses in CallToolResponse
+  - [ ] Backward compatibility with text-only scripts
+
+## Version 1.3.0 - Eagle Transformation Phase 2 (Q3 2025 - Weeks 5-8)
+
+### Phase 2: Eagle Scripts as MCP Tools
+- [ ] **Dynamic Tool Registration** (Weeks 5-6)
+  - [ ] EagleToolProvider hosted service
+  - [ ] FileSystemWatcher for hot-reload
+  - [ ] Metadata parser for tool definitions
+  - [ ] Automatic tool registration/unregistration
+- [ ] **Core Eagle Tool Suite** (Weeks 7-8)
+  - [ ] get_active_bugs.eagle
+  - [ ] deploy_application.eagle
+  - [ ] run_test_suite.eagle
+  - [ ] monitor_performance.eagle
+  - [ ] manage_environments.eagle
+  - [ ] code_quality_check.eagle
+  - [ ] backup_database.eagle
+  - [ ] get_pr_status.eagle
+  - [ ] generate_weekly_report.eagle
+  - [ ] manage_secrets.eagle
+  - [ ] configure_alerts.eagle
+  - [ ] troubleshoot_build.eagle
+
+## Version 1.4.0 - Eagle Transformation Phase 3 (Q4 2025 - Weeks 9-12)
+
+### Phase 3: Scripts as First-Class MCP Modality
+- [ ] **Scripts Modality Implementation** (Weeks 9-10)
+  - [ ] scripts/execute MCP method
+  - [ ] EagleSession management
+  - [ ] Persistent interpreter sessions
+  - [ ] Streaming script execution
+- [ ] **Event-Driven Background Scripts** (Weeks 11-12)
+  - [ ] EagleEventBridge for MediatR integration
+  - [ ] EagleEventSystem for event subscriptions
+  - [ ] mcp::events command
+  - [ ] Eagle services directory monitoring
+  - [ ] Background script lifecycle management
+
+## Version 1.5.0 - Eagle Transformation Phase 4 (Q1 2026 - Weeks 13-16)
+
+### Phase 4: Ecosystem and Production Features
+- [ ] **Script Marketplace** (Week 13)
+  - [ ] discover_scripts.eagle tool
+  - [ ] install_script.eagle tool
+  - [ ] Repository trust levels
+  - [ ] Auto-update capabilities
+- [ ] **Debugging and Testing Tools** (Weeks 14-15)
+  - [ ] debug_eagle_script.eagle
+  - [ ] test_eagle_scripts.eagle
+  - [ ] Breakpoint support
+  - [ ] Variable inspection
+  - [ ] Mock framework
+- [ ] **Documentation and Community** (Week 16)
+  - [ ] generate_docs.eagle
+  - [ ] CONTRIBUTING_EAGLE.md
+  - [ ] Auto-generated API documentation
+  - [ ] Community submission process
+
+### Email Enhancements (Parallel Track)
 - [ ] Email delivery tracking with SES events
 - [ ] Bounce and complaint handling
 - [ ] Email metrics and monitoring dashboard
@@ -54,7 +122,7 @@
 - [ ] Batch email sending
 - [ ] Email scheduling
 
-### Persona System Completion
+### Persona System Completion (Parallel Track)
 - [ ] Learning engine implementation
 - [ ] Azure DevOps context extraction
 - [ ] Persistent memory with Redis
@@ -63,16 +131,7 @@
 - [ ] Persona health monitoring
 - [ ] Custom persona creation
 
-## Version 1.3.0 (Q4 2025)
-
-### Eagle Scripting v2
-- [ ] Decompiled Eagle C# API integration
-- [ ] CLR type marshalling
-- [ ] Complete 12 Eagle MCP tools
-- [ ] Eagle command documentation
-- [ ] Security policy enforcement
-- [ ] Performance monitoring
-- [ ] Script marketplace
+## Version 2.0.0 - Post-Eagle Transformation (Q2 2026)
 
 ### Enterprise Features
 - [ ] Azure AD authentication
@@ -82,8 +141,6 @@
 - [ ] Compliance reporting
 - [ ] Data encryption at rest
 - [ ] Backup and restore
-
-## Version 2.0.0 (Q1 2026)
 
 ### AI/ML Integration
 - [ ] Predictive build failure analysis
