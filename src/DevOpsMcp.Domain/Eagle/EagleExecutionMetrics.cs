@@ -13,7 +13,7 @@ public sealed record EagleExecutionMetrics
     /// <summary>
     /// Number of Eagle commands executed
     /// </summary>
-    public int CommandsExecuted { get; init; }
+    public long CommandsExecuted { get; init; }
     
     /// <summary>
     /// Time spent compiling the script

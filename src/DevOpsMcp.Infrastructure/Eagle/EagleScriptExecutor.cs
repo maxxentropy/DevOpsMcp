@@ -13,8 +13,10 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Eagle;
 using Eagle._Components.Public;
+using Eagle._Constants;
 using Eagle._Containers.Public;
 using Eagle._Interfaces.Public;
+using _Result = Eagle._Components.Public.Result;
 
 namespace DevOpsMcp.Infrastructure.Eagle;
 
@@ -67,20 +69,20 @@ public sealed class EagleScriptExecutor : IEagleScriptExecutor, IDisposable
             
             // Setup execution context
             await SetupInterpreterContextAsync(interpreter, context);
-            
-            // Set up variables first
-            foreach (var variable in context.Variables)
+
+            await Task.Run(() =>
             {
-                global::Eagle._Components.Public.Result? setResult = null;
-                int setErrorLine = 0;
-                var setScript = $"set {variable.Key} {{{variable.Value}}}";
-                await Task.Run(() => 
-                    interpreter.EvaluateScript(setScript, ref setResult, ref setErrorLine));
-            }
-            
+                int setOk = 0;
+                _Result? result = null;
+
+                interpreter.SetVariableValues(
+                    new Dictionary<string, object>(context.Variables),
+                    true, ref setOk, ref result);
+            }, cancellationToken);
+
             // Execute script with a simple output capture wrapper
             var compilationStopwatch = Stopwatch.StartNew();
-            global::Eagle._Components.Public.Result? eagleResult = null;
+            _Result? eagleResult = null;
             int errorLine = 0;
             
             // Create a simple wrapper that captures puts output
@@ -202,29 +204,33 @@ if {{$_result == 0}} {{
         try
         {
             interpreter = await GetOrCreateInterpreterAsync(policy);
-            
+
             // Validate script by attempting to parse it
-            global::Eagle._Components.Public.Result? parseResult = null;
-            int errorLine = 0;
-            
+            _Result? error = null;
+            IParseState? parseState = null; /* NOT USED */
+            TokenList? tokens = null; /* NOT USED */
+
             // Use a minimal script wrapper to test parsing
-            var testScript = $"if {{catch {{{script}}} parseError}} {{ set parseError }}";
-            var returnCode = await Task.Run(() => 
-                interpreter.EvaluateScript(testScript, ref parseResult, ref errorLine), 
+            var returnCode = await Task.Run(() =>
+                Parser.ParseScript(interpreter, null,
+                    Parser.StartLine, script, 0, Length.Invalid,
+                    EngineFlags.None, SubstitutionFlags.Default,
+                    false, false, false, false, ref parseState,
+                    ref tokens, ref error),
                 cancellationToken);
-            
-            if (returnCode == ReturnCode.Ok && string.IsNullOrEmpty(parseResult?.ToString()))
+
+            if (returnCode == ReturnCode.Ok)
             {
                 return new ValidationResult
                 {
                     IsValid = true
                 };
             }
-            
+
             return new ValidationResult
             {
                 IsValid = false,
-                Errors = new[] { parseResult?.ToString() ?? "Parse error" }
+                Errors = new[] { (error != null) ? error.ToString() : String.Empty }
             };
         }
         finally
@@ -295,60 +301,57 @@ if {{$_result == 0}} {{
 
     private Interpreter CreateSafeInterpreter(EagleSecurityPolicy policy)
     {
+        //
+        // HACK: By default, create "safe" interpreter, which is quite
+        //       limited.  Eventually (i.e. post-Beta 56), change this
+        //       to also include a pre-configured IRuleSet in order to
+        //       fine tune the list of commands included in the "safe"
+        //       sandbox.
+        //
+        InterpreterSettings interpreterSettings =
+            InterpreterSettings.CreateDefault();
+
+        if ((policy.Level != SecurityLevel.Maximum) ||
+            !policy.AllowFileSystemAccess ||
+            !policy.AllowNetworkAccess ||
+            !policy.AllowClrReflection ||
+            !policy.AllowProcessExecution ||
+            !policy.AllowEnvironmentAccess)
+        {
+            interpreterSettings.CreateFlags |=
+                CreateFlags.SafeAndHideUnsafe;
+        }
+
         // Create interpreter using the documented API
-        global::Eagle._Components.Public.Result? result = null;
-        var interpreter = Interpreter.Create(ref result);
-        
+        _Result? result = null;
+
+        var interpreter = Interpreter.Create(
+            interpreterSettings, false, ref result);
+
         #pragma warning disable CA1508 // Defensive null check for external API
         if (interpreter is null)
         {
             throw new System.InvalidOperationException($"Failed to create Eagle interpreter: {result}");
         }
         #pragma warning restore CA1508
-        
-        // Apply security restrictions
-        ApplySecurityPolicy(interpreter, policy);
-        
-        return interpreter;
-    }
 
-    private void ApplySecurityPolicy(Interpreter interpreter, EagleSecurityPolicy policy)
-    {
-        // Remove restricted commands
-        foreach (var command in policy.RestrictedCommands)
-        {
-            try
-            {
-                // TODO: Implement command hiding based on Eagle API
-                // This may require using interpreter policies or custom command maps
-                _logger.LogDebug("Command restriction for {Command} pending implementation", command);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to hide command {Command}", command);
-            }
-        }
-        
-        // TODO: Configure additional security settings
+        return interpreter;
     }
 
     private async Task SetupInterpreterContextAsync(
         Interpreter interpreter,
         DevOpsMcp.Domain.Eagle.ExecutionContext context)
     {
-        // Set variables
-        foreach (var variable in context.Variables)
+        await Task.Run(() =>
         {
-            await Task.Run(() => 
-                {
-                    global::Eagle._Components.Public.Result? setResult = null;
-                    int errorLine = 0;
-                    // Use set command to create variables
-                    var setScript = $"set {variable.Key} {{$variable.Value}}";
-                    interpreter.EvaluateScript(setScript, ref setResult, ref errorLine);
-                });
-        }
-        
+            int setOk = 0;
+            _Result? result = null;
+
+            interpreter.SetVariableValues(
+                new Dictionary<string, object>(context.Variables),
+                true, ref setOk, ref result);
+        });
+
         // TODO: Import packages, set working directory, etc.
     }
 
@@ -359,9 +362,14 @@ if {{$_result == 0}} {{
             // Reset interpreter state
             // Reset interpreter state - Eagle may not have a direct Reset method
             // Clear variables and restore to clean state
-            global::Eagle._Components.Public.Result? resetResult = null;
-            int errorLine = 0;
-            interpreter.EvaluateScript("unset -nocomplain {*}[info vars]", ref resetResult, ref errorLine);
+            _Result? result = null;
+
+            if (interpreter.EvaluateScript(
+                    "package require Eagle.Test; cleanState",
+                    ref result) != ReturnCode.Ok)
+            {
+                throw new ScriptException(result);
+            }
         }
         catch (Exception ex)
         {
@@ -371,12 +379,27 @@ if {{$_result == 0}} {{
         }
     }
 
-    private int GetCommandCount(Interpreter interpreter)
+    private long GetCommandCount(Interpreter interpreter)
     {
-        // TODO: Get actual command count from interpreter
-        return 0;
-    }
+        _Result? result = null;
 
+        if (interpreter.EvaluateScript(
+                "info cmdcount", ref result) != ReturnCode.Ok)
+        {
+            return Count.Invalid;
+        }
+
+        long count = 0;
+
+        if (Value.GetWideInteger2(
+                result, ValueFlags.AnyWideInteger,
+                interpreter.CultureInfo, ref count) != ReturnCode.Ok)
+        {
+            return Count.Invalid;
+        }
+
+        return count;
+    }
 
     public void Dispose()
     {
