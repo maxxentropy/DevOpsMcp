@@ -7,6 +7,7 @@ using DevOpsMcp.Server.Tools.Projects;
 using DevOpsMcp.Server.Tools.WorkItems;
 using DevOpsMcp.Server.Tools.Personas;
 using DevOpsMcp.Server.Tools.Eagle;
+using DevOpsMcp.Server.Tools.Email;
 
 namespace DevOpsMcp.Server;
 
@@ -41,6 +42,10 @@ public static class DependencyInjection
         
         // Eagle Tools
         services.AddTransient<EagleExecutionTool>();
+        
+        // Email Tools
+        services.AddTransient<SendEmailTool>();
+        services.AddTransient<PreviewEmailTool>();
         
         // Register tools with the registry
         services.AddHostedService<ToolRegistrationService>();
@@ -77,6 +82,10 @@ internal sealed class ToolRegistrationService(
         
         // Eagle tools
         toolRegistry.RegisterTool(serviceProvider.GetRequiredService<EagleExecutionTool>());
+        
+        // Email tools
+        toolRegistry.RegisterTool(serviceProvider.GetRequiredService<SendEmailTool>());
+        toolRegistry.RegisterTool(serviceProvider.GetRequiredService<PreviewEmailTool>());
         
         logger.LogInformation("Tool registration completed");
         

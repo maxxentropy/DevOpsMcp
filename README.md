@@ -6,6 +6,7 @@ A production-ready Model Context Protocol (MCP) server providing comprehensive A
 
 - **Complete Azure DevOps API Coverage**: Projects, work items, builds, repositories, pull requests, test plans, and artifacts
 - **Eagle Scripting Integration**: Execute Eagle/Tcl scripts with security sandboxing and interpreter pooling
+- **Email Integration**: Send templated emails via AWS SES with Razor template engine
 - **Multi-Protocol Support**: SSE (Server-Sent Events), Standard I/O, and HTTP streaming
 - **Enterprise Security**: PAT, OAuth 2.0, and Azure AD authentication
 - **Real-time Updates**: Webhook support for live status updates
@@ -31,6 +32,7 @@ DevOpsMcp/
 
 - .NET 8.0 SDK
 - Azure DevOps account with Personal Access Token
+- AWS account with SES access (for email features)
 - Docker (optional)
 - Kubernetes cluster (optional)
 
@@ -59,6 +61,10 @@ dotnet run --project src/DevOpsMcp.Server
 docker build -t devops-mcp .
 docker run -e AzureDevOps__PersonalAccessToken=YOUR_PAT \
            -e AzureDevOps__OrganizationUrl=https://dev.azure.com/YOUR_ORG \
+           -e AWS__SES__FromAddress=your-verified-email@domain.com \
+           -e AWS_ACCESS_KEY_ID=YOUR_AWS_KEY \
+           -e AWS_SECRET_ACCESS_KEY=YOUR_AWS_SECRET \
+           -e AWS_REGION=us-east-2 \
            -p 8080:8080 devops-mcp
 ```
 
@@ -69,18 +75,74 @@ docker run -e AzureDevOps__PersonalAccessToken=YOUR_PAT \
 cp .env.example .env
 ```
 
-2. Edit `.env` with your Azure DevOps credentials:
+2. Edit `.env` with your Azure DevOps and AWS credentials:
 ```bash
-# Your Azure DevOps organization URL
+# Azure DevOps Configuration
 AZURE_DEVOPS_ORG_URL=https://dev.azure.com/your-organization
-
-# Your Personal Access Token
 AZURE_DEVOPS_PAT=your-personal-access-token-here
+
+# AWS Configuration (for email)
+AWS_ACCESS_KEY_ID=your-aws-access-key
+AWS_SECRET_ACCESS_KEY=your-aws-secret-key
+AWS_REGION=us-east-2
+
+# Email Configuration
+AWS__SES__FromAddress=your-verified-email@domain.com
+AWS__SES__FromName=DevOps MCP
+AWS__SES__Region=us-east-2
 ```
 
 3. Start the services:
 ```bash
 docker-compose up -d
+```
+
+### Email Setup (AWS SES)
+
+#### Prerequisites
+1. AWS account with SES access
+2. Verified email addresses in SES (for sandbox mode)
+3. AWS access keys with SES permissions
+
+#### Setting up AWS SES
+1. **Verify Email Addresses**:
+   - Go to AWS Console → Simple Email Service
+   - Select your region (e.g., US East Ohio for us-east-2)
+   - Navigate to "Verified identities"
+   - Add and verify your sender email address
+   - In sandbox mode, also verify recipient addresses
+
+2. **Create IAM User**:
+   - Create an IAM user with `AmazonSESFullAccess` policy
+   - Generate access keys for programmatic access
+
+3. **Configure Environment**:
+   ```bash
+   AWS_ACCESS_KEY_ID=your-access-key
+   AWS_SECRET_ACCESS_KEY=your-secret-key
+   AWS__SES__FromAddress=your-verified-email@domain.com
+   AWS__SES__Region=us-east-2
+   ```
+
+4. **Request Production Access** (optional):
+   - For sending to unverified addresses
+   - Go to SES Console → Account dashboard
+   - Request production access
+
+#### Email Templates
+Templates are stored in `EmailTemplates/` directory using Razor syntax:
+```html
+@model dynamic
+@{
+    ViewBag.Subject = "Welcome to DevOps MCP!";
+}
+<!DOCTYPE html>
+<html>
+<body>
+    <h1>Hello @Model.Name!</h1>
+    <p>Welcome to our service.</p>
+</body>
+</html>
 ```
 
 ### Authentication Setup
@@ -143,6 +205,11 @@ curl http://localhost:8080/debug/auth | jq
 | `Eagle__MinPoolSize` | Minimum Eagle interpreter pool size | `2` |
 | `Eagle__MaxPoolSize` | Maximum Eagle interpreter pool size | `10` |
 | `Eagle__SecurityPolicy__DefaultLevel` | Default security level for scripts | `Standard` |
+| `AWS__SES__FromAddress` | Verified sender email address | Required for email |
+| `AWS__SES__FromName` | Display name for emails | `DevOps MCP` |
+| `AWS__SES__Region` | AWS region for SES | `us-east-2` |
+| `AWS__SES__ConfigurationSet` | SES configuration set name | Optional |
+| `Email__TemplatesPath` | Path to email templates | `EmailTemplates` |
 
 ### Authentication Methods
 
@@ -192,6 +259,17 @@ curl http://localhost:8080/debug/auth | jq
   - Interpreter pooling for performance
   - Variable injection support
   - Execution metrics and timeout enforcement
+
+### Email Management
+- `send_email` - Send templated emails via AWS SES
+  - Razor template engine for rich HTML emails
+  - Automatic CSS inlining for email clients
+  - Plain text version generation
+  - Resilience patterns (retry, circuit breaker)
+- `preview_email` - Preview email templates without sending
+  - Test template rendering with sample data
+  - View both HTML and text versions
+  - Template validation
 
 ## Development
 

@@ -16,5 +16,22 @@ services:
       - AzureDevOps__PersonalAccessToken=${AZURE_DEVOPS_PAT}
       - AzureDevOps__AuthMethod=PersonalAccessToken
       - Logging__LogLevel__Default=Information
+      # AWS Configuration (optional - can use IAM role or credentials file)
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      # Email Configuration
+      - AWS__SES__FromAddress=${EMAIL_FROM_ADDRESS:-noreply@devops-mcp.com}
+      - AWS__SES__FromName=${EMAIL_FROM_NAME:-DevOps MCP}
+      - AWS__SES__Region=${SES_REGION:-us-east-1}
+      - AWS__SES__ConfigurationSet=${SES_CONFIGURATION_SET:-}
+      - AWS__SES__UseSandbox=${SES_USE_SANDBOX:-true}
+      - Email__UseLocalSmtp=${EMAIL_USE_LOCAL_SMTP:-false}
+      - Email__LocalSmtpHost=${EMAIL_LOCAL_SMTP_HOST:-localhost}
+      - Email__LocalSmtpPort=${EMAIL_LOCAL_SMTP_PORT:-1025}
+      - Email__SaveToDisk=${EMAIL_SAVE_TO_DISK:-false}
+      - Email__SavePath=${EMAIL_SAVE_PATH:-/app/sent-emails}
     volumes:
       - ./logs:/app/logs
+      - ./sent-emails:/app/sent-emails
+      - ./EmailTemplates:/app/EmailTemplates

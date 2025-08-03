@@ -17,22 +17,22 @@ public static class PersonaServiceCollectionExtensions
     public static IServiceCollection AddPersonaServices(this IServiceCollection services)
     {
         // Core persona services
-        services.AddScoped<IPersonaMemoryManager, PersonaMemoryManager>();
+        services.AddSingleton<IPersonaMemoryManager, PersonaMemoryManager>();
         services.AddSingleton<IPersonaOrchestrator, PersonaOrchestrator>();
-        services.AddScoped<IPersonaBehaviorAdapter, PersonaBehaviorAdapter>();
+        services.AddSingleton<IPersonaBehaviorAdapter, PersonaBehaviorAdapter>();
         services.AddSingleton<IPersonaLearningEngine, PersonaLearningEngine>();
 
         // Register individual personas
-        services.AddScoped<DevOpsEngineerPersona>();
-        services.AddScoped<SiteReliabilityEngineerPersona>();
-        services.AddScoped<SecurityEngineerPersona>();
-        services.AddScoped<EngineeringManagerPersona>();
+        services.AddSingleton<DevOpsEngineerPersona>();
+        services.AddSingleton<SiteReliabilityEngineerPersona>();
+        services.AddSingleton<SecurityEngineerPersona>();
+        services.AddSingleton<EngineeringManagerPersona>();
 
         // Register personas as IDevOpsPersona
-        services.AddScoped<IDevOpsPersona, DevOpsEngineerPersona>(provider => provider.GetRequiredService<DevOpsEngineerPersona>());
-        services.AddScoped<IDevOpsPersona, SiteReliabilityEngineerPersona>(provider => provider.GetRequiredService<SiteReliabilityEngineerPersona>());
-        services.AddScoped<IDevOpsPersona, SecurityEngineerPersona>(provider => provider.GetRequiredService<SecurityEngineerPersona>());
-        services.AddScoped<IDevOpsPersona, EngineeringManagerPersona>(provider => provider.GetRequiredService<EngineeringManagerPersona>());
+        services.AddSingleton<IDevOpsPersona, DevOpsEngineerPersona>(provider => provider.GetRequiredService<DevOpsEngineerPersona>());
+        services.AddSingleton<IDevOpsPersona, SiteReliabilityEngineerPersona>(provider => provider.GetRequiredService<SiteReliabilityEngineerPersona>());
+        services.AddSingleton<IDevOpsPersona, SecurityEngineerPersona>(provider => provider.GetRequiredService<SecurityEngineerPersona>());
+        services.AddSingleton<IDevOpsPersona, EngineeringManagerPersona>(provider => provider.GetRequiredService<EngineeringManagerPersona>());
 
         return services;
     }

@@ -6,6 +6,8 @@
     <PublishAot>false</PublishAot>
     <InvariantGlobalization>false</InvariantGlobalization>
     <PublishTrimmed>false</PublishTrimmed>
+    <PreserveCompilationContext>true</PreserveCompilationContext>
+    <PreserveCompilationReferences>true</PreserveCompilationReferences>
   </PropertyGroup>
 
   <ItemGroup>

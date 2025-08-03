@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
+    <PreserveCompilationContext>true</PreserveCompilationContext>
   </PropertyGroup>
 
   <ItemGroup>
@@ -15,6 +16,13 @@
     <PackageReference Include="Azure.Identity" Version="1.11.4" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="7.2.0" />
     <PackageReference Include="Eagle" Version="1.0.8734.30319" />
+    <!-- AWS SES and Email packages -->
+    <PackageReference Include="AWSSDK.SimpleEmail" Version="3.7.401.8" />
+    <PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="3.7.301" />
+    <PackageReference Include="RazorLight" Version="2.3.1" />
+    <PackageReference Include="PreMailer.Net" Version="2.6.0" />
+    <PackageReference Include="MimeKit" Version="4.8.0" />
+    <PackageReference Include="Polly" Version="8.2.1" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,10 +1,12 @@
 using System;
 using System.IO;
+using Amazon.SimpleEmail;
 using DevOpsMcp.Application.Personas.Memory;
 using DevOpsMcp.Domain.Interfaces;
 using DevOpsMcp.Infrastructure.Authentication;
 using DevOpsMcp.Infrastructure.Configuration;
 using DevOpsMcp.Infrastructure.Eagle;
+using DevOpsMcp.Infrastructure.Email;
 using DevOpsMcp.Infrastructure.Personas.Memory;
 using DevOpsMcp.Infrastructure.Repositories;
 using DevOpsMcp.Infrastructure.Services;
@@ -25,6 +27,8 @@ public static class DependencyInjection
         // Configuration
         services.Configure<AzureDevOpsOptions>(configuration.GetSection(AzureDevOpsOptions.SectionName));
         services.Configure<EagleOptions>(configuration.GetSection(EagleOptions.SectionName));
+        services.Configure<EmailOptions>(configuration.GetSection(EmailOptions.SectionName));
+        services.Configure<AwsSesOptions>(configuration.GetSection(AwsSesOptions.SectionName));
         
         // Azure DevOps Client Factory - Use factory delegate to ensure proper configuration binding
         services.AddSingleton<IAzureDevOpsClientFactory>(provider =>
@@ -67,6 +71,25 @@ public static class DependencyInjection
         
         // Eagle Script Executor
         services.AddSingleton<IEagleScriptExecutor, EagleScriptExecutor>();
+        
+        // Email Services
+        services.AddSingleton<IEmailTemplateRenderer, RazorEmailTemplateRenderer>();
+        services.AddSingleton<IEmailService, SesEmailService>();
+        
+        // AWS SES Client
+        services.AddSingleton<IAmazonSimpleEmailService>(provider =>
+        {
+            var options = provider.GetRequiredService<IOptions<AwsSesOptions>>();
+            var config = new AmazonSimpleEmailServiceConfig
+            {
+                RegionEndpoint = Amazon.RegionEndpoint.GetBySystemName(options.Value.Region)
+            };
+            
+            return new AmazonSimpleEmailServiceClient(config);
+        });
+        
+        // Memory cache for templates
+        services.AddMemoryCache();
         
         return services;
     }
