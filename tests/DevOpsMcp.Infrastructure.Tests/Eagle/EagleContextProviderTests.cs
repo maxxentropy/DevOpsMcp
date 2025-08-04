@@ -27,7 +27,8 @@ public sealed class EagleContextProviderTests : IDisposable
         _logger = _serviceProvider.GetRequiredService<ILogger<EagleContextProvider>>();
         var mockSessionStore = new Mock<IEagleSessionStore>();
         var mockMcpCallTool = new Mock<IMcpCallToolCommand>();
-        _contextProvider = new EagleContextProvider(_serviceProvider, _logger, mockSessionStore.Object, mockMcpCallTool.Object);
+        var mockMcpOutput = new Mock<IMcpOutputCommand>();
+        _contextProvider = new EagleContextProvider(_serviceProvider, _logger, mockSessionStore.Object, mockMcpCallTool.Object, mockMcpOutput.Object);
     }
 
     [Fact]
