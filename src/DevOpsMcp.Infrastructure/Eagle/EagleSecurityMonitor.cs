@@ -216,7 +216,7 @@ public class SecuritySessionMetrics
         var events = _events.ToList();
         var eventCounts = new Dictionary<SecurityEventType, int>();
         
-        foreach (SecurityEventType eventType in Enum.GetValues(typeof(SecurityEventType)))
+        foreach (SecurityEventType eventType in Enum.GetValues<SecurityEventType>())
         {
             eventCounts[eventType] = events.Count(e => e.Type == eventType);
         }
