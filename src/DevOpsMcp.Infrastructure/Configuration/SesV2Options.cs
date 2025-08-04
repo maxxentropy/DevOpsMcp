@@ -3,6 +3,7 @@ namespace DevOpsMcp.Infrastructure.Configuration;
 /// <summary>
 /// Configuration options for AWS Simple Email Service V2
 /// </summary>
+#pragma warning disable CA1034 // Nested types should not be visible
 public sealed class SesV2Options
 {
     /// <summary>
@@ -48,7 +49,7 @@ public sealed class SesV2Options
     /// <summary>
     /// Reply-to addresses (if different from From)
     /// </summary>
-    public List<string> ReplyToAddresses { get; set; } = new();
+    public List<string> ReplyToAddresses { get; } = new();
 
     /// <summary>
     /// Whether to enable detailed logging
@@ -63,7 +64,7 @@ public sealed class SesV2Options
     /// <summary>
     /// Whether to enable V2 features (feature flag)
     /// </summary>
-    public bool Enabled { get; set; } = false;
+    public bool Enabled { get; set; }
 
     /// <summary>
     /// Template configuration
@@ -119,7 +120,7 @@ public sealed class SesV2Options
         /// <summary>
         /// Event types to track
         /// </summary>
-        public List<string> Types { get; set; } = new() 
+        public List<string> Types { get; } = new() 
         { 
             "Send", "Bounce", "Complaint", "Delivery", "Open", "Click" 
         };
@@ -199,16 +200,17 @@ public sealed class SesV2Options
         /// <summary>
         /// Enable PII detection
         /// </summary>
-        public bool EnablePiiDetection { get; set; } = false;
+        public bool EnablePiiDetection { get; set; }
 
         /// <summary>
         /// Allowed recipient domains (empty = all allowed)
         /// </summary>
-        public List<string> AllowedDomains { get; set; } = new();
+        public List<string> AllowedDomains { get; } = new();
 
         /// <summary>
         /// Blocked recipient domains
         /// </summary>
-        public List<string> BlockedDomains { get; set; } = new();
+        public List<string> BlockedDomains { get; } = new();
     }
 }
+#pragma warning restore CA1034 // Nested types should not be visible

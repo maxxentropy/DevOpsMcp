@@ -74,7 +74,7 @@ public sealed class SesEmailService : IEmailService
             }
 
             // Render template
-            var renderResult = await _templateRenderer.RenderAsync(request.TemplateName, request.TemplateData, cancellationToken);
+            var renderResult = await _templateRenderer.RenderAsync(request.TemplateName ?? string.Empty, request.TemplateData, cancellationToken);
             if (renderResult.IsError)
             {
                 return renderResult.Errors;

@@ -115,8 +115,8 @@ public static class DependencyInjection
         services.AddSingleton<SesEmailService>();
         
         // Register V2 service
-        services.AddSingleton<SesV2EmailService>();
-        services.AddSingleton<IEnhancedEmailService>(provider => provider.GetRequiredService<SesV2EmailService>());
+        services.AddSingleton<SesV2EmailSender>();
+        services.AddSingleton<IEnhancedEmailService>(provider => provider.GetRequiredService<SesV2EmailSender>());
         
         // Register IEmailService based on feature flag
         services.AddSingleton<IEmailService>(provider =>
@@ -124,9 +124,9 @@ public static class DependencyInjection
             var v2Options = provider.GetRequiredService<IOptions<SesV2Options>>();
             if (v2Options.Value.Enabled)
             {
-                var logger = provider.GetRequiredService<ILogger<SesV2EmailService>>();
+                var logger = provider.GetRequiredService<ILogger<SesV2EmailSender>>();
                 logger.LogInformation("Using AWS SES V2 email service");
-                return provider.GetRequiredService<SesV2EmailService>();
+                return provider.GetRequiredService<SesV2EmailSender>();
             }
             else
             {
