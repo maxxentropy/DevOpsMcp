@@ -3,6 +3,7 @@ using Microsoft.TeamFoundation.WorkItemTracking.WebApi.Models;
 using Microsoft.VisualStudio.Services.WebApi.Patch;
 using Microsoft.VisualStudio.Services.WebApi.Patch.Json;
 using DevOpsMcp.Infrastructure.Services;
+using DevOpsMcp.Domain.Entities;
 using DomainWorkItem = DevOpsMcp.Domain.Entities.WorkItem;
 using DomainWorkItemRelation = DevOpsMcp.Domain.Entities.WorkItemRelation;
 using ApiWorkItem = Microsoft.TeamFoundation.WorkItemTracking.WebApi.Models.WorkItem;
@@ -204,6 +205,13 @@ public sealed class WorkItemRepository(
 
     public async Task<IReadOnlyList<DomainWorkItem>> QueryAsync(string projectId, string wiql, CancellationToken cancellationToken = default)
     {
+        // Delegate to the new method with default options for backward compatibility
+        var defaultOptions = new WorkItemQueryOptions { Limit = 200 }; // Higher default for backward compatibility
+        return await QueryAsync(projectId, wiql, defaultOptions, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<DomainWorkItem>> QueryAsync(string projectId, string wiql, WorkItemQueryOptions options, CancellationToken cancellationToken = default)
+    {
         try
         {
             var client = clientFactory.CreateWorkItemClient();
@@ -216,8 +224,33 @@ public sealed class WorkItemRepository(
                 return Array.Empty<DomainWorkItem>();
             }
 
-            var ids = result.WorkItems.Select(wi => wi.Id).ToList();
-            var workItems = await client.GetWorkItemsAsync(projectId, ids, expand: WorkItemExpand.All, cancellationToken: cancellationToken);
+            // Apply pagination
+            var ids = result.WorkItems
+                .Skip(options.Skip)
+                .Take(options.Limit)
+                .Select(wi => wi.Id)
+                .ToList();
+
+            if (!ids.Any())
+            {
+                return Array.Empty<DomainWorkItem>();
+            }
+
+            // Determine which fields to retrieve
+            var fields = options.Fields?.ToArray() ?? WorkItemQueryOptions.DefaultFields.ToArray();
+            
+            // Determine expansion level based on options
+            var expand = options.IncludeRelations ? WorkItemExpand.Relations : WorkItemExpand.Fields;
+            
+            var workItems = await client.GetWorkItemsAsync(
+                projectId, 
+                ids, 
+                fields: fields,
+                expand: expand, 
+                cancellationToken: cancellationToken);
+            
+            logger.LogInformation("Retrieved {Count} work items out of {Total} total results", 
+                workItems.Count, result.WorkItems.Count());
             
             return workItems.Select(MapToEntity).ToList();
         }

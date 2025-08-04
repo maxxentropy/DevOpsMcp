@@ -2,10 +2,7 @@
   "mcpServers": {
     "devops-mcp": {
       "type": "http",
-      "url": "http://localhost:8080/mcp",
-      "headers": {
-        "Authorization": "Bearer ${AZURE_DEVOPS_PAT}"
-      }
+      "url": "http://localhost:8080/mcp"
     }
   }
 }

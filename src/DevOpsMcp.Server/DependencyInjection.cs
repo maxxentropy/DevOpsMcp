@@ -31,6 +31,8 @@ public static class DependencyInjection
         services.AddTransient<CreateProjectTool>();
         services.AddTransient<CreateWorkItemTool>();
         services.AddTransient<QueryWorkItemsTool>();
+        services.AddTransient<GetRecentWorkItemsTool>();
+        services.AddTransient<GetWorkItemByIdTool>();
         
         // Persona Tools
         services.AddTransient<ActivatePersonaTool>();
@@ -72,6 +74,8 @@ internal sealed class ToolRegistrationService(
         // Work item tools
         toolRegistry.RegisterTool(serviceProvider.GetRequiredService<CreateWorkItemTool>());
         toolRegistry.RegisterTool(serviceProvider.GetRequiredService<QueryWorkItemsTool>());
+        toolRegistry.RegisterTool(serviceProvider.GetRequiredService<GetRecentWorkItemsTool>());
+        toolRegistry.RegisterTool(serviceProvider.GetRequiredService<GetWorkItemByIdTool>());
         
         // Persona tools
         toolRegistry.RegisterTool(serviceProvider.GetRequiredService<ActivatePersonaTool>());

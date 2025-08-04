@@ -1,4 +1,6 @@
 using DevOpsMcp.Contracts.WorkItems;
+using DevOpsMcp.Domain.Entities;
+using DevOpsMcp.Application.Validators;
 
 namespace DevOpsMcp.Application.Queries.WorkItems;
 
@@ -6,6 +8,10 @@ public sealed record QueryWorkItemsQuery : IRequest<ErrorOr<List<WorkItemDto>>>
 {
     public required string ProjectId { get; init; }
     public required string Wiql { get; init; }
+    public int Limit { get; init; } = 50;
+    public int Skip { get; init; }
+    public IReadOnlyList<string>? Fields { get; init; }
+    public bool IncludeRelations { get; init; }
 }
 
 public sealed class QueryWorkItemsQueryHandler(
@@ -16,7 +22,20 @@ public sealed class QueryWorkItemsQueryHandler(
 {
     public async Task<ErrorOr<List<WorkItemDto>>> Handle(QueryWorkItemsQuery request, CancellationToken cancellationToken)
     {
-        logger.LogInformation("Querying work items in project {ProjectId}", request.ProjectId);
+        logger.LogInformation("Querying work items in project {ProjectId} with limit {Limit}", 
+            request.ProjectId, request.Limit);
+
+        // Validate WIQL query
+        var validation = WiqlValidator.Validate(request.Wiql, request.ProjectId);
+        if (!validation.IsValid)
+        {
+            return Error.Validation("Wiql.Invalid", validation.Message!);
+        }
+        
+        if (validation.IsWarning)
+        {
+            logger.LogWarning("WIQL validation warning: {Warning}", validation.Message);
+        }
 
         var projectExists = await projectRepository.ExistsAsync(request.ProjectId, cancellationToken);
         if (!projectExists)
@@ -24,10 +43,34 @@ public sealed class QueryWorkItemsQueryHandler(
             return Error.NotFound("Project.NotFound", $"Project {request.ProjectId} not found");
         }
 
-        var workItems = await workItemRepository.QueryAsync(request.ProjectId, request.Wiql, cancellationToken);
+        var options = new WorkItemQueryOptions
+        {
+            Limit = request.Limit,
+            Skip = request.Skip,
+            Fields = request.Fields,
+            IncludeRelations = request.IncludeRelations
+        };
 
-        var dtos = workItems.Select(MapToDto).ToList();
-        return dtos;
+        try
+        {
+            var workItems = await workItemRepository.QueryAsync(request.ProjectId, request.Wiql, options, cancellationToken);
+
+            var dtos = workItems.Select(MapToDto).ToList();
+            return dtos;
+        }
+        catch (Exception ex) when (ex.Message.Contains("VS403437") || ex.Message.Contains("FROM clause"))
+        {
+            // Azure DevOps error for TOP clause
+            return Error.Validation("Wiql.TopNotSupported", 
+                "The TOP clause is not supported in Azure DevOps WIQL. " +
+                "Use the 'limit' parameter instead to control the number of results.");
+        }
+        catch (Exception ex) when (ex.Message.Contains("syntax"))
+        {
+            return Error.Validation("Wiql.SyntaxError", 
+                $"WIQL syntax error: {ex.Message}. " +
+                $"Example valid query: {WiqlValidator.GetSampleQuery()}");
+        }
     }
 
     private static WorkItemDto MapToDto(WorkItem workItem)
