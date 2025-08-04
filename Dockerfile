@@ -38,10 +38,10 @@ RUN addgroup -g 1000 -S appuser && \
 # Copy published app
 COPY --from=build --chown=appuser:appuser /app/publish .
 
-# Create directories for persona memory, logs, and email templates
-RUN mkdir -p /app/data/PersonaMemory /app/EmailTemplates /app/sent-emails && \
-    chown -R appuser:appuser /app/data /app/EmailTemplates /app/sent-emails && \
-    chmod -R 755 /app/data /app/EmailTemplates /app/sent-emails
+# Create directories for persona memory, logs, email templates, and eagle sessions
+RUN mkdir -p /app/data/PersonaMemory /app/EmailTemplates /app/sent-emails /app/DevOpsMcp && \
+    chown -R appuser:appuser /app/data /app/EmailTemplates /app/sent-emails /app/DevOpsMcp && \
+    chmod -R 755 /app/data /app/EmailTemplates /app/sent-emails /app/DevOpsMcp
 
 # Set environment variables
 ENV ASPNETCORE_URLS=http://+:8080 \

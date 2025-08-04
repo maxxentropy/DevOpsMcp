@@ -1,0 +1,11 @@
+# Ignore temporary test scripts
+*.tmp.tcl
+*.debug.tcl
+
+# Ignore test output
+*.out
+*.log
+
+# Keep official test scripts
+!*.test.tcl
+!*.spec.tcl

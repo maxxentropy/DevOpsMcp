@@ -93,4 +93,37 @@ public sealed record EagleSecurityPolicy
         MaxExecutionTimeMs = 30000,
         MaxMemoryMb = 256
     };
+    
+    /// <summary>
+    /// Create an elevated security policy (less restrictive)
+    /// </summary>
+    public static EagleSecurityPolicy Elevated => new()
+    {
+        Level = SecurityLevel.Elevated,
+        AllowFileSystemAccess = true,
+        AllowNetworkAccess = false,
+        AllowClrReflection = true,
+        AllowProcessExecution = false,
+        AllowEnvironmentAccess = true,
+        AllowedPaths = new[] { "/tmp", "/app/data" },
+        AllowedAssemblies = new[] { "System", "System.Core", "System.Linq", "System.IO", "System.Net" },
+        MaxExecutionTimeMs = 60000,
+        MaxMemoryMb = 512
+    };
+    
+    /// <summary>
+    /// Create a maximum security policy (least restrictive - use with caution)
+    /// </summary>
+    public static EagleSecurityPolicy Maximum => new()
+    {
+        Level = SecurityLevel.Maximum,
+        AllowFileSystemAccess = true,
+        AllowNetworkAccess = true,
+        AllowClrReflection = true,
+        AllowProcessExecution = true,
+        AllowEnvironmentAccess = true,
+        RestrictedCommands = Array.Empty<string>(),
+        MaxExecutionTimeMs = 300000,
+        MaxMemoryMb = 1024
+    };
 }

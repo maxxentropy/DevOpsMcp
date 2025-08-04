@@ -1,6 +1,7 @@
 using System.Text.Json;
 using DevOpsMcp.Domain.Eagle;
 using DevOpsMcp.Domain.Interfaces;
+using DevOpsMcp.Application.Services;
 using ErrorOr;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -13,13 +14,16 @@ namespace DevOpsMcp.Application.Commands.Eagle;
 public sealed class ExecuteEagleScriptCommandHandler : IRequestHandler<ExecuteEagleScriptCommand, ErrorOr<EagleExecutionResult>>
 {
     private readonly IEagleScriptExecutor _executor;
+    private readonly IDevOpsContextBuilder _contextBuilder;
     private readonly ILogger<ExecuteEagleScriptCommandHandler> _logger;
 
     public ExecuteEagleScriptCommandHandler(
         IEagleScriptExecutor executor,
+        IDevOpsContextBuilder contextBuilder,
         ILogger<ExecuteEagleScriptCommandHandler> logger)
     {
         _executor = executor;
+        _contextBuilder = contextBuilder;
         _logger = logger;
     }
 
@@ -62,9 +66,44 @@ public sealed class ExecuteEagleScriptCommandHandler : IRequestHandler<ExecuteEa
             {
                 "minimal" => EagleSecurityPolicy.Minimal,
                 "standard" => EagleSecurityPolicy.Standard,
+                "elevated" => EagleSecurityPolicy.Elevated,
+                "maximum" => EagleSecurityPolicy.Maximum,
                 _ => EagleSecurityPolicy.Standard
             };
 
+            // Build DevOps context
+            var devOpsContext = _contextBuilder.BuildContext(sessionId: request.SessionId);
+            
+            // Parse environment variables if provided
+            var environmentVariables = new Dictionary<string, string>();
+            if (!string.IsNullOrWhiteSpace(request.EnvironmentVariablesJson))
+            {
+                try
+                {
+                    var parsed = JsonSerializer.Deserialize<Dictionary<string, string>>(request.EnvironmentVariablesJson);
+                    if (parsed != null)
+                    {
+                        environmentVariables = parsed;
+                    }
+                }
+                catch (JsonException ex)
+                {
+                    return Error.Validation($"Invalid environment variables JSON: {ex.Message}");
+                }
+            }
+            
+            // Parse output format
+            var outputFormat = request.OutputFormat.ToLowerInvariant() switch
+            {
+                "json" => OutputFormat.Json,
+                "xml" => OutputFormat.Xml,
+                "yaml" => OutputFormat.Yaml,
+                "table" => OutputFormat.Table,
+                "csv" => OutputFormat.Csv,
+                "markdown" => OutputFormat.Markdown,
+                _ => OutputFormat.Plain
+            };
+            
             // Create execution context
             var context = new DevOpsMcp.Domain.Eagle.ExecutionContext
             {
@@ -72,8 +111,13 @@ public sealed class ExecuteEagleScriptCommandHandler : IRequestHandler<ExecuteEa
                 SessionId = request.SessionId,
                 Script = request.Script,
                 Variables = variables,
+                ImportedPackages = request.ImportedPackages ?? new List<string>(),
                 SecurityPolicy = securityPolicy,
-                Timeout = TimeSpan.FromSeconds(request.TimeoutSeconds)
+                Timeout = TimeSpan.FromSeconds(request.TimeoutSeconds),
+                WorkingDirectory = request.WorkingDirectory ?? Environment.CurrentDirectory,
+                EnvironmentVariables = environmentVariables,
+                DevOpsContext = devOpsContext,
+                OutputFormat = outputFormat
             };
 
             // Execute script

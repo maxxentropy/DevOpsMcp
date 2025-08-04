@@ -1,5 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
 using DevOpsMcp.Application.Behaviors;
+using DevOpsMcp.Application.Services;
+using MediatR;
+using FluentValidation;
 
 namespace DevOpsMcp.Application;
 
@@ -19,6 +22,9 @@ public static class DependencyInjection
         services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly);
         
         services.AddMemoryCache();
+        
+        // Register application services
+        services.AddScoped<IDevOpsContextBuilder, DevOpsContextBuilder>();
         
         return services;
     }

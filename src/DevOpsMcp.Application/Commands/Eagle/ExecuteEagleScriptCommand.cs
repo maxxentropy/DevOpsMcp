@@ -33,4 +33,24 @@ public sealed record ExecuteEagleScriptCommand : IRequest<ErrorOr<EagleExecution
     /// Timeout in seconds
     /// </summary>
     public int TimeoutSeconds { get; init; } = 30;
+    
+    /// <summary>
+    /// Desired output format (plain, json, xml, yaml, table)
+    /// </summary>
+    public string OutputFormat { get; init; } = "plain";
+    
+    /// <summary>
+    /// Packages to import before execution
+    /// </summary>
+    public List<string>? ImportedPackages { get; init; }
+    
+    /// <summary>
+    /// Working directory for script execution
+    /// </summary>
+    public string? WorkingDirectory { get; init; }
+    
+    /// <summary>
+    /// Environment variables to set (as JSON object)
+    /// </summary>
+    public string? EnvironmentVariablesJson { get; init; }
 }

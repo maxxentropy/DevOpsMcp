@@ -255,10 +255,13 @@ curl http://localhost:8080/debug/auth | jq
 
 ### Eagle Scripting
 - `execute_eagle_script` - Execute Eagle/Tcl scripts in a secure sandbox
+  - **Phase 1 (Complete)**: Rich context injection, structured output, security sandboxing, session persistence
   - Configurable security levels (Minimal, Standard, Elevated, Maximum)
   - Interpreter pooling for performance
   - Variable injection support
   - Execution metrics and timeout enforcement
+  - MCP context commands (mcp::context, mcp::session, mcp::call_tool)
+  - Structured output formats (JSON, XML, YAML, Table, CSV, Markdown)
   - **[See Eagle Transformation Blueprint](docs/EAGLE_TRANSFORMATION_BLUEPRINT.md)** for the revolutionary roadmap
 
 ### Email Management

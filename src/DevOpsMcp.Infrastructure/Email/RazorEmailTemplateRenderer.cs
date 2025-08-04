@@ -239,7 +239,7 @@ public sealed class RazorEmailTemplateRenderer : IEmailTemplateRenderer
         if (model is Dictionary<string, object> dict)
         {
             var expando = new System.Dynamic.ExpandoObject();
-            var expandoDict = (IDictionary<string, object>)expando;
+            var expandoDict = (IDictionary<string, object?>)expando;
             foreach (var kvp in dict)
             {
                 expandoDict[kvp.Key] = kvp.Value;

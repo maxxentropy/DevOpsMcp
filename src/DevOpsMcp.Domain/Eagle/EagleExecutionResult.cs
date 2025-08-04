@@ -46,6 +46,11 @@ public sealed record EagleExecutionResult
     public int ExitCode { get; init; }
     
     /// <summary>
+    /// Session ID used for this execution
+    /// </summary>
+    public string? SessionId { get; init; }
+    
+    /// <summary>
     /// Calculated duration of the execution
     /// </summary>
     public TimeSpan Duration => EndTimeUtc - StartTimeUtc;
@@ -54,4 +59,9 @@ public sealed record EagleExecutionResult
     /// Security policy violations encountered during execution
     /// </summary>
     public IReadOnlyList<string> SecurityViolations { get; init; } = Array.Empty<string>();
+    
+    /// <summary>
+    /// Formatted output if output formatting was requested
+    /// </summary>
+    public FormattedOutput? FormattedOutput { get; init; }
 }

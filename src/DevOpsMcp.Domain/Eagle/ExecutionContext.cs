@@ -1,3 +1,5 @@
+using DevOpsMcp.Domain.Personas;
+
 namespace DevOpsMcp.Domain.Eagle;
 
 /// <summary>
@@ -62,4 +64,14 @@ public sealed record ExecutionContext
     /// Execution mode
     /// </summary>
     public ExecutionMode Mode { get; init; } = ExecutionMode.Batch;
+    
+    /// <summary>
+    /// DevOps context for rich context injection
+    /// </summary>
+    public DevOpsContext? DevOpsContext { get; init; }
+    
+    /// <summary>
+    /// Desired output format for the script result
+    /// </summary>
+    public OutputFormat OutputFormat { get; init; } = OutputFormat.Plain;
 }

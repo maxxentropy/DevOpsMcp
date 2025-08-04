@@ -28,7 +28,11 @@ public sealed class EagleExecutionTool(IMediator mediator) : BaseTool<EagleExecu
             VariablesJson = arguments.VariablesJson,
             SecurityLevel = arguments.SecurityLevel ?? "Standard",
             SessionId = arguments.SessionId,
-            TimeoutSeconds = arguments.TimeoutSeconds ?? 30
+            TimeoutSeconds = arguments.TimeoutSeconds ?? 30,
+            OutputFormat = arguments.OutputFormat ?? "plain",
+            ImportedPackages = arguments.ImportedPackages,
+            WorkingDirectory = arguments.WorkingDirectory,
+            EnvironmentVariablesJson = arguments.EnvironmentVariablesJson
         };
 
         var result = await mediator.Send(command, cancellationToken);
@@ -47,6 +51,7 @@ public sealed class EagleExecutionTool(IMediator mediator) : BaseTool<EagleExecu
             executionResult.IsSuccess,
             result = executionResult.Result,
             error = executionResult.ErrorMessage,
+            sessionId = executionResult.SessionId,
             executionResult.Duration,
             metrics = new
             {
@@ -80,4 +85,16 @@ public sealed record EagleExecutionToolArguments
     
     [Description("Maximum execution time in seconds (default: 30)")]
     public int? TimeoutSeconds { get; init; }
+    
+    [Description("Output format: plain, json, xml, yaml, table, csv, markdown")]
+    public string? OutputFormat { get; init; }
+    
+    [Description("List of Eagle packages to import before execution")]
+    public List<string>? ImportedPackages { get; init; }
+    
+    [Description("Working directory for script execution")]
+    public string? WorkingDirectory { get; init; }
+    
+    [Description("JSON object containing environment variables to set")]
+    public string? EnvironmentVariablesJson { get; init; }
 }

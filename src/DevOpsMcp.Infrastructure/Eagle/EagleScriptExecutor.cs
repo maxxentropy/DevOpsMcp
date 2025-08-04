@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,6 +10,7 @@ using DevOpsMcp.Domain.Eagle;
 using DevOpsMcp.Domain.Interfaces;
 using DevOpsMcp.Infrastructure.Configuration;
 using ErrorOr;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Eagle;
@@ -26,24 +28,39 @@ namespace DevOpsMcp.Infrastructure.Eagle;
 public sealed class EagleScriptExecutor : IEagleScriptExecutor, IDisposable
 {
     private readonly ILogger<EagleScriptExecutor> _logger;
+    private readonly IServiceProvider _serviceProvider;
     private readonly EagleOptions _options;
-    private readonly ConcurrentBag<Interpreter> _interpreterPool;
+    private readonly InterpreterPool _interpreterPool;
     private readonly SemaphoreSlim _executionSemaphore;
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _runningExecutions;
+    private readonly IEagleContextProvider _contextProvider;
+    private readonly IEagleOutputFormatter _outputFormatter;
+    private readonly IEagleSecurityMonitor _securityMonitor;
+    private readonly IExecutionHistoryStore _historyStore;
     private bool _disposed;
 
     public EagleScriptExecutor(
         ILogger<EagleScriptExecutor> logger,
-        IOptions<EagleOptions> options)
+        IServiceProvider serviceProvider,
+        IOptions<EagleOptions> options,
+        IEagleContextProvider contextProvider,
+        IEagleOutputFormatter outputFormatter,
+        IEagleSecurityMonitor securityMonitor,
+        IExecutionHistoryStore historyStore)
     {
         _logger = logger;
+        _serviceProvider = serviceProvider;
         _options = options.Value;
-        _interpreterPool = new ConcurrentBag<Interpreter>();
+        _contextProvider = contextProvider;
+        _outputFormatter = outputFormatter;
+        _securityMonitor = securityMonitor;
+        _historyStore = historyStore;
+        _interpreterPool = new InterpreterPool(
+            serviceProvider.GetRequiredService<ILogger<InterpreterPool>>(), 
+            options, 
+            securityMonitor);
         _executionSemaphore = new SemaphoreSlim(_options.MaxConcurrentExecutions);
         _runningExecutions = new ConcurrentDictionary<string, CancellationTokenSource>();
-        
-        // Pre-warm the pool
-        PreWarmInterpreterPool();
     }
 
     public async Task<EagleExecutionResult> ExecuteAsync(
@@ -55,7 +72,7 @@ public sealed class EagleScriptExecutor : IEagleScriptExecutor, IDisposable
         var stopwatch = Stopwatch.StartNew();
         
         await _executionSemaphore.WaitAsync(cancellationToken);
-        Interpreter? interpreter = null;
+        PooledInterpreter? pooledInterpreter = null;
         
         try
         {
@@ -64,8 +81,12 @@ public sealed class EagleScriptExecutor : IEagleScriptExecutor, IDisposable
             cts.CancelAfter(context.Timeout);
             _runningExecutions[executionId] = cts;
             
-            // Get or create interpreter
-            interpreter = await GetOrCreateInterpreterAsync(context.SecurityPolicy);
+            // Get interpreter from pool
+            pooledInterpreter = await _interpreterPool.AcquireAsync(context.SecurityPolicy, cts.Token);
+            var interpreter = pooledInterpreter.Interpreter;
+            
+            // Configure security tracking for this execution
+            ConfigureSecurityTracking(executionId, context.SecurityPolicy);
             
             // Setup execution context
             await SetupInterpreterContextAsync(interpreter, context);
@@ -128,6 +149,9 @@ if {{$_result == 0}} {{
             
             stopwatch.Stop();
             
+            // Get security metrics for this execution
+            var sessionMetrics = _securityMonitor.GetSessionMetrics(executionId);
+            
             // Build metrics
             var metrics = new EagleExecutionMetrics
             {
@@ -135,26 +159,94 @@ if {{$_result == 0}} {{
                 ExecutionTime = stopwatch.Elapsed - compilationStopwatch.Elapsed,
                 CommandsExecuted = GetCommandCount(interpreter),
                 MemoryUsageBytes = GC.GetTotalMemory(false),
-                SecurityChecksPerformed = 0 // TODO: Track security checks
+                SecurityChecksPerformed = sessionMetrics.TotalEvents
             };
             
-            return new EagleExecutionResult
+            // Process result with automatic structured output detection
+            string? processedResult = null;
+            FormattedOutput? formattedOutput = null;
+            
+            if (eagleResult != null)
+            {
+                var resultStr = eagleResult.ToString() ?? string.Empty;
+                
+                // Automatic structured output detection for Phase 1.2
+                if (returnCode == ReturnCode.Ok && !string.IsNullOrWhiteSpace(resultStr))
+                {
+                    // Try to detect if the result is a Tcl list or dictionary
+                    var structuredJson = TryConvertToStructuredOutput(interpreter, resultStr);
+                    if (structuredJson != null)
+                    {
+                        processedResult = structuredJson;
+                        
+                        // If we detected structured output and no format was specified, 
+                        // automatically format as JSON
+                        if (context.OutputFormat == OutputFormat.Plain)
+                        {
+                            formattedOutput = new FormattedOutput
+                            {
+                                Format = OutputFormat.Json,
+                                Content = structuredJson
+                            };
+                        }
+                    }
+                    else
+                    {
+                        processedResult = resultStr;
+                    }
+                }
+                else
+                {
+                    processedResult = resultStr;
+                }
+                
+                // Apply requested formatting
+                if (context.OutputFormat != OutputFormat.Plain && formattedOutput == null)
+                {
+                    formattedOutput = await _outputFormatter.FormatAsync(
+                        processedResult, 
+                        context.OutputFormat);
+                }
+            }
+            
+            var result = new EagleExecutionResult
             {
                 ExecutionId = executionId,
                 IsSuccess = returnCode == ReturnCode.Ok,
-                Result = eagleResult?.ToString(),
+                Result = processedResult,
                 ErrorMessage = returnCode != ReturnCode.Ok ? eagleResult?.ToString() : null,
                 StartTimeUtc = startTime,
                 EndTimeUtc = DateTime.UtcNow,
                 Metrics = metrics,
-                ExitCode = (int)returnCode
+                ExitCode = (int)returnCode,
+                SessionId = context.SessionId,
+                FormattedOutput = formattedOutput
             };
+            
+            // Track execution in history
+            // Track execution in history
+            var historyEntry = new ExecutionHistoryEntry
+            {
+                ExecutionId = result.ExecutionId,
+                SessionId = context.SessionId ?? string.Empty,
+                Script = context.Script ?? string.Empty,
+                Result = result.Result ?? string.Empty,
+                Success = result.IsSuccess,
+                StartTime = result.StartTimeUtc,
+                EndTime = result.EndTimeUtc,
+                ErrorMessage = result.ErrorMessage,
+                ExecutionTime = result.Metrics?.ExecutionTime ?? TimeSpan.Zero,
+                MemoryUsageBytes = result.Metrics?.MemoryUsageBytes ?? 0
+            };
+            await _historyStore.AddExecutionAsync(historyEntry);
+            
+            return result;
         }
         catch (OperationCanceledException)
         {
             _logger.LogWarning("Script execution {ExecutionId} timed out", executionId);
             
-            return new EagleExecutionResult
+            var timeoutResult = new EagleExecutionResult
             {
                 ExecutionId = executionId,
                 IsSuccess = false,
@@ -162,14 +254,32 @@ if {{$_result == 0}} {{
                 StartTimeUtc = startTime,
                 EndTimeUtc = DateTime.UtcNow,
                 Metrics = new EagleExecutionMetrics(),
-                ExitCode = -1
+                ExitCode = -1,
+                SessionId = context.SessionId
             };
+            
+            // Track timeout in history
+            var timeoutEntry = new ExecutionHistoryEntry
+            {
+                ExecutionId = timeoutResult.ExecutionId,
+                SessionId = context.SessionId ?? string.Empty,
+                Script = context.Script ?? string.Empty,
+                Result = timeoutResult.Result ?? string.Empty,
+                Success = timeoutResult.IsSuccess,
+                StartTime = timeoutResult.StartTimeUtc,
+                EndTime = timeoutResult.EndTimeUtc,
+                ErrorMessage = timeoutResult.ErrorMessage,
+                ExecutionTime = timeoutResult.Metrics?.ExecutionTime ?? TimeSpan.Zero,
+                MemoryUsageBytes = timeoutResult.Metrics?.MemoryUsageBytes ?? 0
+            };
+            await _historyStore.AddExecutionAsync(timeoutEntry);
+            return timeoutResult;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Script execution {ExecutionId} failed", executionId);
             
-            return new EagleExecutionResult
+            var errorResult = new EagleExecutionResult
             {
                 ExecutionId = executionId,
                 IsSuccess = false,
@@ -177,17 +287,34 @@ if {{$_result == 0}} {{
                 StartTimeUtc = startTime,
                 EndTimeUtc = DateTime.UtcNow,
                 Metrics = new EagleExecutionMetrics(),
-                ExitCode = -1
+                ExitCode = -1,
+                SessionId = context.SessionId
             };
+            
+            // Track error in history
+            var errorEntry = new ExecutionHistoryEntry
+            {
+                ExecutionId = errorResult.ExecutionId,
+                SessionId = context.SessionId ?? string.Empty,
+                Script = context.Script ?? string.Empty,
+                Result = errorResult.Result ?? string.Empty,
+                Success = errorResult.IsSuccess,
+                StartTime = errorResult.StartTimeUtc,
+                EndTime = errorResult.EndTimeUtc,
+                ErrorMessage = errorResult.ErrorMessage,
+                ExecutionTime = errorResult.Metrics?.ExecutionTime ?? TimeSpan.Zero,
+                MemoryUsageBytes = errorResult.Metrics?.MemoryUsageBytes ?? 0
+            };
+            await _historyStore.AddExecutionAsync(errorEntry);
+            return errorResult;
         }
         finally
         {
             _runningExecutions.TryRemove(executionId, out _);
             
-            if (interpreter != null)
+            if (pooledInterpreter != null)
             {
-                ResetInterpreter(interpreter);
-                _interpreterPool.Add(interpreter);
+                _interpreterPool.Release(pooledInterpreter, hadError: !pooledInterpreter.IsActive);
             }
             
             _executionSemaphore.Release();
@@ -199,11 +326,12 @@ if {{$_result == 0}} {{
         EagleSecurityPolicy policy,
         CancellationToken cancellationToken = default)
     {
-        Interpreter? interpreter = null;
+        PooledInterpreter? pooledInterpreter = null;
         
         try
         {
-            interpreter = await GetOrCreateInterpreterAsync(policy);
+            pooledInterpreter = await _interpreterPool.AcquireAsync(policy, cancellationToken);
+            var interpreter = pooledInterpreter.Interpreter;
 
             // Validate script by attempting to parse it
             _Result? error = null;
@@ -235,10 +363,9 @@ if {{$_result == 0}} {{
         }
         finally
         {
-            if (interpreter != null)
+            if (pooledInterpreter != null)
             {
-                ResetInterpreter(interpreter);
-                _interpreterPool.Add(interpreter);
+                _interpreterPool.Release(pooledInterpreter);
             }
         }
     }
@@ -269,73 +396,48 @@ if {{$_result == 0}} {{
         return Error.NotFound($"Execution {executionId} not found");
     }
 
-    public Task<IReadOnlyList<EagleExecutionResult>> GetExecutionHistoryAsync(
+    public async Task<IReadOnlyList<EagleExecutionResult>> GetExecutionHistoryAsync(
         string? sessionId = null,
         int limit = 10,
         CancellationToken cancellationToken = default)
     {
-        // TODO: Implement execution history tracking
-        return Task.FromResult<IReadOnlyList<EagleExecutionResult>>(
-            Array.Empty<EagleExecutionResult>());
-    }
-
-    private void PreWarmInterpreterPool()
-    {
-        for (int i = 0; i < _options.MinPoolSize; i++)
+        if (!string.IsNullOrEmpty(sessionId))
         {
-            var interpreter = CreateSafeInterpreter(EagleSecurityPolicy.Standard);
-            _interpreterPool.Add(interpreter);
+            var entries = await _historyStore.GetSessionHistoryAsync(sessionId);
+            return entries.Take(limit).Select(ConvertToExecutionResult).ToList();
+        }
+        else
+        {
+            var entries = await _historyStore.GetRecentHistoryAsync(limit);
+            return entries.Select(ConvertToExecutionResult).ToList();
         }
     }
-
-    private async Task<Interpreter> GetOrCreateInterpreterAsync(EagleSecurityPolicy policy)
+    
+    private static EagleExecutionResult ConvertToExecutionResult(ExecutionHistoryEntry entry)
     {
-        if (_interpreterPool.TryTake(out var interpreter))
+        return new EagleExecutionResult
         {
-            // TODO: Verify interpreter matches security policy
-            return interpreter;
-        }
-        
-        return await Task.Run(() => CreateSafeInterpreter(policy));
-    }
-
-    private Interpreter CreateSafeInterpreter(EagleSecurityPolicy policy)
-    {
-        //
-        // HACK: By default, create "safe" interpreter, which is quite
-        //       limited.  Eventually (i.e. post-Beta 56), change this
-        //       to also include a pre-configured IRuleSet in order to
-        //       fine tune the list of commands included in the "safe"
-        //       sandbox.
-        //
-        InterpreterSettings interpreterSettings =
-            InterpreterSettings.CreateDefault();
-
-        if ((policy.Level != SecurityLevel.Maximum) ||
-            !policy.AllowFileSystemAccess ||
-            !policy.AllowNetworkAccess ||
-            !policy.AllowClrReflection ||
-            !policy.AllowProcessExecution ||
-            !policy.AllowEnvironmentAccess)
-        {
-            interpreterSettings.CreateFlags |=
-                CreateFlags.SafeAndHideUnsafe;
-        }
-
-        // Create interpreter using the documented API
-        _Result? result = null;
-
-        var interpreter = Interpreter.Create(
-            interpreterSettings, false, ref result);
-
-        #pragma warning disable CA1508 // Defensive null check for external API
-        if (interpreter is null)
-        {
-            throw new System.InvalidOperationException($"Failed to create Eagle interpreter: {result}");
-        }
-        #pragma warning restore CA1508
-
-        return interpreter;
+            ExecutionId = entry.ExecutionId,
+            IsSuccess = entry.Success,
+            Result = entry.Result,
+            ErrorMessage = entry.ErrorMessage,
+            StartTimeUtc = entry.StartTime,
+            EndTimeUtc = entry.EndTime,
+            Metrics = new EagleExecutionMetrics
+            {
+                ExecutionTime = entry.ExecutionTime,
+                MemoryUsageBytes = entry.MemoryUsageBytes,
+                CommandsExecuted = 0, // Not stored in history entry
+                CompilationTime = TimeSpan.Zero, // Not stored in history entry
+                VariablesCreated = 0,
+                ProceduresDefined = 0,
+                SecurityChecksPerformed = 0,
+                CustomMetrics = new Dictionary<string, object>()
+            },
+            ExitCode = entry.Success ? 0 : -1,
+            SecurityViolations = Array.Empty<string>(),
+            FormattedOutput = null
+        };
     }
 
     private async Task SetupInterpreterContextAsync(
@@ -352,32 +454,174 @@ if {{$_result == 0}} {{
                 true, ref setOk, ref result);
         });
 
-        // TODO: Import packages, set working directory, etc.
+        // Import requested packages
+        await ImportPackagesAsync(interpreter, context.ImportedPackages);
+        
+        // Set working directory
+        await SetWorkingDirectoryAsync(interpreter, context.WorkingDirectory);
+        
+        // Inject environment variables
+        await InjectEnvironmentVariablesAsync(interpreter, context.EnvironmentVariables);
+
+        // Inject rich context commands
+        // Wrap the Eagle interpreter in an adapter
+        var interpreterAdapter = new EagleInterpreterAdapter(interpreter);
+        _contextProvider.InjectRichContext(interpreterAdapter, context.DevOpsContext);
+        
+        // Inject output formatting commands
+        // Pass the already-created adapter to maintain consistency
+        _outputFormatter.InjectOutputCommands(interpreterAdapter);
     }
 
-    private void ResetInterpreter(Interpreter interpreter)
+    private async Task ImportPackagesAsync(Interpreter interpreter, IReadOnlyList<string> packages)
     {
+        if (packages == null || packages.Count == 0)
+            return;
+        
+        foreach (var package in packages)
+        {
+            try
+            {
+                _Result? result = null;
+                var script = $"package require {package}";
+                
+                var returnCode = await Task.Run(() => 
+                    interpreter.EvaluateScript(script, ref result));
+                
+                if (returnCode != ReturnCode.Ok)
+                {
+                    _logger.LogWarning("Failed to import package {Package}: {Error}", 
+                        package, result?.ToString());
+                }
+                else
+                {
+                    _logger.LogDebug("Successfully imported package {Package}", package);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error importing package {Package}", package);
+            }
+        }
+    }
+    
+    private async Task SetWorkingDirectoryAsync(Interpreter interpreter, string workingDirectory)
+    {
+        if (string.IsNullOrEmpty(workingDirectory) || workingDirectory == Environment.CurrentDirectory)
+            return;
+        
         try
         {
-            // Reset interpreter state
-            // Reset interpreter state - Eagle may not have a direct Reset method
-            // Clear variables and restore to clean state
-            _Result? result = null;
-
-            if (interpreter.EvaluateScript(
-                    "package require Eagle.Test; cleanState",
-                    ref result) != ReturnCode.Ok)
+            // Validate directory exists
+            if (!Directory.Exists(workingDirectory))
             {
-                throw new ScriptException(result);
+                _logger.LogWarning("Working directory does not exist: {Directory}", workingDirectory);
+                return;
+            }
+            
+            _Result? result = null;
+            var script = $"cd \"{workingDirectory.Replace("\\", "/")}\"";
+            
+            var returnCode = await Task.Run(() => 
+                interpreter.EvaluateScript(script, ref result));
+            
+            if (returnCode != ReturnCode.Ok)
+            {
+                _logger.LogWarning("Failed to set working directory to {Directory}: {Error}", 
+                    workingDirectory, result?.ToString());
+            }
+            else
+            {
+                _logger.LogDebug("Set working directory to {Directory}", workingDirectory);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to reset interpreter");
-            // Dispose and don't return to pool
-            (interpreter as IDisposable)?.Dispose();
+            _logger.LogError(ex, "Error setting working directory to {Directory}", workingDirectory);
         }
     }
+    
+    private async Task InjectEnvironmentVariablesAsync(
+        Interpreter interpreter, 
+        IReadOnlyDictionary<string, string> environmentVariables)
+    {
+        if (environmentVariables == null || environmentVariables.Count == 0)
+            return;
+        
+        try
+        {
+            foreach (var kvp in environmentVariables)
+            {
+                _Result? result = null;
+                // Set in the env array which Eagle/Tcl uses for environment variables
+                // Escape the value to handle special characters
+                var escapedValue = kvp.Value.Replace("\\", "\\\\")
+                                           .Replace("\"", "\\\"")
+                                           .Replace("$", "\\$")
+                                           .Replace("[", "\\[")
+                                           .Replace("]", "\\]");
+                var script = $"set ::env({kvp.Key}) \"{escapedValue}\"";
+                
+                var returnCode = await Task.Run(() => 
+                    interpreter.EvaluateScript(script, ref result));
+                
+                if (returnCode != ReturnCode.Ok)
+                {
+                    _logger.LogWarning("Failed to set environment variable {Name}: {Error}", 
+                        kvp.Key, result?.ToString());
+                }
+                else
+                {
+                    _logger.LogDebug("Set environment variable {Name}", kvp.Key);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error injecting environment variables");
+        }
+    }
+
+    private void ConfigureSecurityTracking(string executionId, EagleSecurityPolicy policy)
+    {
+        try
+        {
+            // Track security configuration
+            // RecordSecurityCheck is an internal implementation detail not exposed through the interface
+            // This is acceptable since both EagleScriptExecutor and EagleSecurityMonitor are in the Infrastructure layer
+            if (_securityMonitor is EagleSecurityMonitor concreteMonitor)
+            {
+                concreteMonitor.RecordSecurityCheck(executionId, policy.Level, "interpreter_configured", true);
+            }
+            
+            // Log security settings for this execution
+            if (policy.AllowFileSystemAccess && policy.AllowedPaths?.Count > 0)
+            {
+                foreach (var path in policy.AllowedPaths)
+                {
+                    _logger.LogDebug("Execution {ExecutionId} allowed path: {Path}", executionId, path);
+                }
+            }
+            
+            if (policy.AllowClrReflection && policy.AllowedAssemblies?.Count > 0)
+            {
+                foreach (var assembly in policy.AllowedAssemblies)
+                {
+                    _logger.LogDebug("Execution {ExecutionId} allowed assembly: {Assembly}", executionId, assembly);
+                }
+            }
+            
+            if (policy.MaxExecutionTimeMs > 0)
+            {
+                _logger.LogDebug("Execution {ExecutionId} timeout: {Timeout}ms", executionId, policy.MaxExecutionTimeMs);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to configure security tracking for execution {ExecutionId}", executionId);
+        }
+    }
+
 
     private long GetCommandCount(Interpreter interpreter)
     {
@@ -401,16 +645,90 @@ if {{$_result == 0}} {{
         return count;
     }
 
+    private string? TryConvertToStructuredOutput(Interpreter interpreter, string result)
+    {
+        try
+        {
+            // First check if it's already valid JSON
+            if ((result.StartsWith('{') && result.EndsWith('}')) || 
+                (result.StartsWith('[') && result.EndsWith(']')))
+            {
+                try
+                {
+                    // Validate it's proper JSON
+                    _ = System.Text.Json.JsonDocument.Parse(result);
+                    return result;
+                }
+                catch
+                {
+                    // Not valid JSON, continue with list/dict detection
+                }
+            }
+
+            // Get the Tcl dictionary converter
+            var tclConverter = _serviceProvider.GetService<ITclDictionaryConverter>();
+            if (tclConverter == null)
+            {
+                _logger.LogDebug("TclDictionaryConverter not available");
+                return null;
+            }
+
+            // Try to detect if it's a Tcl dictionary
+            if (tclConverter.IsTclDictionary(result))
+            {
+                _logger.LogDebug("Detected Tcl dictionary in output");
+                try
+                {
+                    var jsonOutput = tclConverter.ConvertTclDictToJson(result);
+                    _logger.LogDebug("Successfully converted Tcl dictionary to JSON");
+                    return jsonOutput;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Failed to convert Tcl dictionary to JSON");
+                }
+            }
+
+            // Try to detect if it's a Tcl list
+            _Result? listCheckResult = null;
+            var listCheckCode = interpreter.EvaluateScript($"llength {{{result}}}", ref listCheckResult);
+            
+            if (listCheckCode == ReturnCode.Ok && int.TryParse(listCheckResult?.ToString(), out int listLength) && listLength > 0)
+            {
+                _logger.LogDebug("Detected Tcl list with {Length} elements", listLength);
+                
+                // Check if it looks like a simple list (not already wrapped in braces)
+                if (!result.Trim().StartsWith('{') || !result.Trim().EndsWith('}'))
+                {
+                    try
+                    {
+                        var jsonOutput = tclConverter.ConvertTclListToJson(result);
+                        _logger.LogDebug("Successfully converted Tcl list to JSON");
+                        return jsonOutput;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug(ex, "Failed to convert Tcl list to JSON");
+                    }
+                }
+            }
+            
+            return null; // Not structured data or conversion failed
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed to detect structured output");
+            return null;
+        }
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
         
-        while (_interpreterPool.TryTake(out var interpreter))
-        {
-            (interpreter as IDisposable)?.Dispose();
-        }
-        
+        _interpreterPool?.Dispose();
         _executionSemaphore?.Dispose();
+        // History store is managed by DI container
         _disposed = true;
     }
 }

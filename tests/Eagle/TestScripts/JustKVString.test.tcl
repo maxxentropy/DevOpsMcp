@@ -1,0 +1,2 @@
+# Just evaluate a key-value string
+"name {John Doe} age 30 email john@example.com active true"

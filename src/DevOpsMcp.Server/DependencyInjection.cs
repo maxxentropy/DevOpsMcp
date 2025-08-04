@@ -42,6 +42,7 @@ public static class DependencyInjection
         
         // Eagle Tools
         services.AddTransient<EagleExecutionTool>();
+        services.AddTransient<EagleHistoryTool>();
         
         // Email Tools
         services.AddTransient<SendEmailTool>();
@@ -82,6 +83,7 @@ internal sealed class ToolRegistrationService(
         
         // Eagle tools
         toolRegistry.RegisterTool(serviceProvider.GetRequiredService<EagleExecutionTool>());
+        toolRegistry.RegisterTool(serviceProvider.GetRequiredService<EagleHistoryTool>());
         
         // Email tools
         toolRegistry.RegisterTool(serviceProvider.GetRequiredService<SendEmailTool>());

@@ -6,6 +6,7 @@ using DevOpsMcp.Domain.Interfaces;
 using DevOpsMcp.Infrastructure.Authentication;
 using DevOpsMcp.Infrastructure.Configuration;
 using DevOpsMcp.Infrastructure.Eagle;
+using DevOpsMcp.Infrastructure.Eagle.Commands;
 using DevOpsMcp.Infrastructure.Email;
 using DevOpsMcp.Infrastructure.Personas.Memory;
 using DevOpsMcp.Infrastructure.Repositories;
@@ -69,7 +70,16 @@ public static class DependencyInjection
         services.AddSingleton<IPersonaMemoryStore, FileBasedPersonaMemoryStore>();
         services.Configure<PersonaMemoryStoreOptions>(configuration.GetSection("PersonaMemoryStore"));
         
-        // Eagle Script Executor
+        // Eagle Script Executor and Context Provider
+        services.AddSingleton<IEagleSessionStore, EagleSessionStore>();
+        services.AddSingleton<IMcpCallToolCommand, McpCallToolCommand>();
+        services.AddSingleton<IMcpOutputCommand, McpOutputCommandHandler>();
+        services.AddSingleton<ITclDictionaryConverter, TclDictionaryConverter>();
+        services.AddSingleton<IEagleInterpreterPool, InterpreterPool>();
+        services.AddSingleton<IEagleContextProvider, EagleContextProvider>();
+        services.AddSingleton<IEagleOutputFormatter, EagleOutputFormatter>();
+        services.AddSingleton<IEagleSecurityMonitor, EagleSecurityMonitor>();
+        services.AddSingleton<IExecutionHistoryStore, ExecutionHistoryStore>();
         services.AddSingleton<IEagleScriptExecutor, EagleScriptExecutor>();
         
         // Email Services
