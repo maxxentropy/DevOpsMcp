@@ -29,19 +29,29 @@ public sealed class EmailRequest
     public IReadOnlyList<string> Bcc { get; }
 
     /// <summary>
-    /// Email subject line
+    /// Email subject line (used when not using AWS template)
     /// </summary>
-    public string Subject { get; }
+    public string? Subject { get; private init; }
 
     /// <summary>
-    /// Name of the Razor template to use
+    /// Name of the AWS SES template to use
     /// </summary>
-    public string TemplateName { get; }
+    public string? TemplateName { get; private init; }
+
+    /// <summary>
+    /// Raw HTML content (used when not using template)
+    /// </summary>
+    public string? HtmlContent { get; private init; }
+
+    /// <summary>
+    /// Raw text content (used when not using template)
+    /// </summary>
+    public string? TextContent { get; private init; }
 
     /// <summary>
     /// Data to pass to the template for rendering
     /// </summary>
-    public IReadOnlyDictionary<string, object> TemplateData { get; }
+    public IReadOnlyDictionary<string, object> TemplateData { get; private init; }
 
     /// <summary>
     /// Optional reply-to address
@@ -68,30 +78,26 @@ public sealed class EmailRequest
     /// </summary>
     public IReadOnlyDictionary<string, string> Tags { get; }
 
-    public EmailRequest(
+    /// <summary>
+    /// Configuration set to use for tracking
+    /// </summary>
+    public string? ConfigurationSet { get; }
+
+    private EmailRequest(
         string to,
-        string subject,
-        string templateName,
-        Dictionary<string, object>? templateData = null,
         List<string>? cc = null,
         List<string>? bcc = null,
         string? replyTo = null,
         EmailPriority priority = EmailPriority.Normal,
         string? correlationId = null,
-        Dictionary<string, string>? tags = null)
+        Dictionary<string, string>? tags = null,
+        string? configurationSet = null)
     {
         if (string.IsNullOrWhiteSpace(to))
             throw new ArgumentException("Recipient address is required", nameof(to));
-        if (string.IsNullOrWhiteSpace(subject))
-            throw new ArgumentException("Subject is required", nameof(subject));
-        if (string.IsNullOrWhiteSpace(templateName))
-            throw new ArgumentException("Template name is required", nameof(templateName));
 
         Id = Guid.NewGuid().ToString();
         To = to;
-        Subject = subject;
-        TemplateName = templateName;
-        TemplateData = templateData ?? new Dictionary<string, object>();
         Cc = cc ?? new List<string>();
         Bcc = bcc ?? new List<string>();
         ReplyTo = replyTo;
@@ -99,6 +105,65 @@ public sealed class EmailRequest
         CreatedAt = DateTime.UtcNow;
         CorrelationId = correlationId;
         Tags = tags ?? new Dictionary<string, string>();
+        ConfigurationSet = configurationSet;
+        TemplateData = new Dictionary<string, object>();
+    }
+
+    /// <summary>
+    /// Create a template-based email request
+    /// </summary>
+    public static EmailRequest FromTemplate(
+        string to,
+        string templateName,
+        Dictionary<string, object>? templateData = null,
+        List<string>? cc = null,
+        List<string>? bcc = null,
+        string? replyTo = null,
+        EmailPriority priority = EmailPriority.Normal,
+        string? correlationId = null,
+        Dictionary<string, string>? tags = null,
+        string? configurationSet = null)
+    {
+        if (string.IsNullOrWhiteSpace(templateName))
+            throw new ArgumentException("Template name is required", nameof(templateName));
+
+        var request = new EmailRequest(to, cc, bcc, replyTo, priority, correlationId, tags, configurationSet)
+        {
+            TemplateName = templateName,
+            TemplateData = templateData ?? new Dictionary<string, object>()
+        };
+        return request;
+    }
+
+    /// <summary>
+    /// Create a raw content email request
+    /// </summary>
+    public static EmailRequest FromContent(
+        string to,
+        string subject,
+        string htmlContent,
+        string? textContent = null,
+        List<string>? cc = null,
+        List<string>? bcc = null,
+        string? replyTo = null,
+        EmailPriority priority = EmailPriority.Normal,
+        string? correlationId = null,
+        Dictionary<string, string>? tags = null,
+        string? configurationSet = null)
+    {
+        if (string.IsNullOrWhiteSpace(subject))
+            throw new ArgumentException("Subject is required", nameof(subject));
+        if (string.IsNullOrWhiteSpace(htmlContent))
+            throw new ArgumentException("HTML content is required", nameof(htmlContent));
+
+        var request = new EmailRequest(to, cc, bcc, replyTo, priority, correlationId, tags, configurationSet)
+        {
+            Subject = subject,
+            HtmlContent = htmlContent,
+            TextContent = textContent,
+            TemplateData = new Dictionary<string, object>()
+        };
+        return request;
     }
 }
 

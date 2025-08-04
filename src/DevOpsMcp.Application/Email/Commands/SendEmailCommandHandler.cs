@@ -33,16 +33,15 @@ public sealed class SendEmailCommandHandler : IRequestHandler<SendEmailCommand, 
             _logger.LogInformation("Sending email to {To} with template {Template}", 
                 request.To, request.TemplateName);
 
-            var emailRequest = new EmailRequest(
+            var emailRequest = EmailRequest.FromTemplate(
                 to: request.To,
-                cc: request.Cc.ToList(),
-                bcc: request.Bcc.ToList(),
-                subject: request.Subject,
                 templateName: request.TemplateName,
                 templateData: request.TemplateData,
+                cc: request.Cc.ToList(),
+                bcc: request.Bcc.ToList(),
                 replyTo: request.ReplyTo,
-                tags: request.Tags,
-                priority: request.Priority);
+                priority: request.Priority,
+                tags: request.Tags);
 
             // Send with optional security policy override
             ErrorOr<EmailResult> result;

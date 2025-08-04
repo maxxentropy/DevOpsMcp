@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using Amazon.SimpleEmail;
+using Amazon.SimpleEmailV2;
 using DevOpsMcp.Application.Personas.Memory;
 using DevOpsMcp.Domain.Interfaces;
 using DevOpsMcp.Infrastructure.Authentication;
@@ -30,6 +31,7 @@ public static class DependencyInjection
         services.Configure<EagleOptions>(configuration.GetSection(EagleOptions.SectionName));
         services.Configure<EmailOptions>(configuration.GetSection(EmailOptions.SectionName));
         services.Configure<AwsSesOptions>(configuration.GetSection(AwsSesOptions.SectionName));
+        services.Configure<SesV2Options>(configuration.GetSection(SesV2Options.SectionName));
         
         // Azure DevOps Client Factory - Use factory delegate to ensure proper configuration binding
         services.AddSingleton<IAzureDevOpsClientFactory>(provider =>
@@ -84,9 +86,8 @@ public static class DependencyInjection
         
         // Email Services
         services.AddSingleton<IEmailTemplateRenderer, RazorEmailTemplateRenderer>();
-        services.AddSingleton<IEmailService, SesEmailService>();
         
-        // AWS SES Client
+        // AWS SES V1 Client (for backward compatibility)
         services.AddSingleton<IAmazonSimpleEmailService>(provider =>
         {
             var options = provider.GetRequiredService<IOptions<AwsSesOptions>>();
@@ -96,6 +97,43 @@ public static class DependencyInjection
             };
             
             return new AmazonSimpleEmailServiceClient(config);
+        });
+        
+        // AWS SES V2 Client
+        services.AddSingleton<IAmazonSimpleEmailServiceV2>(provider =>
+        {
+            var options = provider.GetRequiredService<IOptions<SesV2Options>>();
+            var config = new AmazonSimpleEmailServiceV2Config
+            {
+                RegionEndpoint = Amazon.RegionEndpoint.GetBySystemName(options.Value.Region)
+            };
+            
+            return new AmazonSimpleEmailServiceV2Client(config);
+        });
+        
+        // Register V1 service
+        services.AddSingleton<SesEmailService>();
+        
+        // Register V2 service
+        services.AddSingleton<SesV2EmailService>();
+        services.AddSingleton<IEnhancedEmailService>(provider => provider.GetRequiredService<SesV2EmailService>());
+        
+        // Register IEmailService based on feature flag
+        services.AddSingleton<IEmailService>(provider =>
+        {
+            var v2Options = provider.GetRequiredService<IOptions<SesV2Options>>();
+            if (v2Options.Value.Enabled)
+            {
+                var logger = provider.GetRequiredService<ILogger<SesV2EmailService>>();
+                logger.LogInformation("Using AWS SES V2 email service");
+                return provider.GetRequiredService<SesV2EmailService>();
+            }
+            else
+            {
+                var logger = provider.GetRequiredService<ILogger<SesEmailService>>();
+                logger.LogInformation("Using AWS SES V1 email service");
+                return provider.GetRequiredService<SesEmailService>();
+            }
         });
         
         // Memory cache for templates
