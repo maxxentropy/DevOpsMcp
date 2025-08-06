@@ -1,93 +1,99 @@
-using System.Text.Json;
 using Amazon.SimpleEmailV2;
 using Amazon.SimpleEmailV2.Model;
 using DevOpsMcp.Domain.Email;
 using DevOpsMcp.Domain.Interfaces;
 using DevOpsMcp.Infrastructure.Configuration;
-using DevOpsMcp.Infrastructure.Email.Builders;
 using ErrorOr;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Polly;
-using Polly.CircuitBreaker;
+using System.Text.Json;
 
 namespace DevOpsMcp.Infrastructure.Email;
 
 /// <summary>
-/// Clean implementation of AWS SES V2 email sending service
+/// Minimal AWS SES V2 email service implementation
+/// Leverages AWS's built-in infrastructure for reliability, scaling, and monitoring
 /// </summary>
-public sealed class SesV2EmailSender : IEnhancedEmailService
+public sealed class SesV2EmailSender : IEmailService
 {
     private readonly IAmazonSimpleEmailServiceV2 _sesClient;
-    private readonly IMemoryCache _cache;
     private readonly ILogger<SesV2EmailSender> _logger;
     private readonly SesV2Options _options;
-    private readonly EmailOptions _emailOptions;
-    private readonly SendEmailRequestBuilder _requestBuilder;
-    private readonly IAsyncPolicy<EmailResult> _resilientPolicy;
 
     public SesV2EmailSender(
         IAmazonSimpleEmailServiceV2 sesClient,
-        IMemoryCache cache,
         ILogger<SesV2EmailSender> logger,
-        IOptions<SesV2Options> options,
-        IOptions<EmailOptions> emailOptions)
+        IOptions<SesV2Options> options)
     {
         _sesClient = sesClient ?? throw new ArgumentNullException(nameof(sesClient));
-        _cache = cache ?? throw new ArgumentNullException(nameof(cache));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _options = options.Value ?? throw new ArgumentNullException(nameof(options));
-        _emailOptions = emailOptions.Value ?? throw new ArgumentNullException(nameof(emailOptions));
-        
-        _requestBuilder = new SendEmailRequestBuilder(
-            _options.FromAddress,
-            _options.FromName,
-            _options.DefaultConfigurationSet,
-            _options.ReplyToAddresses);
-            
-        _resilientPolicy = CreateResiliencePolicy();
+        _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
     }
 
     public async Task<ErrorOr<EmailResult>> SendEmailAsync(
-        EmailRequest request, 
-        CancellationToken cancellationToken = default)
-    {
-        var policy = GetSecurityPolicy(_emailOptions.DefaultSecurityPolicy);
-        return await SendEmailAsync(request, policy, cancellationToken);
-    }
-
-    public async Task<ErrorOr<EmailResult>> SendEmailAsync(
-        EmailRequest request,
-        EmailSecurityPolicy policy,
+        string toAddress, 
+        string subject, 
+        string body, 
+        bool isHtml = true,
+        List<string>? cc = null,
+        List<string>? bcc = null,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            // Validate request
-            var validationResult = await ValidateRequestAsync(request, policy, cancellationToken);
-            if (validationResult.IsError)
+            var request = new SendEmailRequest
             {
-                return validationResult.Errors;
+                FromEmailAddress = FormatFromAddress(),
+                Destination = new Destination
+                {
+                    ToAddresses = new List<string> { toAddress },
+                    CcAddresses = cc ?? new List<string>(),
+                    BccAddresses = bcc ?? new List<string>()
+                },
+                Content = new EmailContent
+                {
+                    Simple = new Message
+                    {
+                        Subject = new Content { Data = subject, Charset = "UTF-8" },
+                        Body = new Body
+                        {
+                            Html = isHtml ? new Content { Data = body, Charset = "UTF-8" } : null,
+                            Text = !isHtml ? new Content { Data = body, Charset = "UTF-8" } : null
+                        }
+                    }
+                }
+            };
+
+            // Add configuration set if configured
+            if (!string.IsNullOrEmpty(_options.DefaultConfigurationSet))
+            {
+                request.ConfigurationSetName = _options.DefaultConfigurationSet;
             }
 
-            // Send with resilience policy
-            var result = await _resilientPolicy.ExecuteAsync(
-                async (ct) => await SendEmailInternalAsync(request, ct),
-                cancellationToken);
-
-            // Cache result if successful
-            if (result.Success && !string.IsNullOrEmpty(result.MessageId))
+            // Add reply-to if configured
+            if (_options.ReplyToAddresses?.Any() == true)
             {
-                await CacheEmailStatusAsync(result.MessageId, EmailStatus.Sent);
+                request.ReplyToAddresses = _options.ReplyToAddresses.ToList();
             }
 
-            return result;
+            var response = await _sesClient.SendEmailAsync(request, cancellationToken);
+
+            _logger.LogInformation("Email sent successfully to {ToAddress}. MessageId: {MessageId}", 
+                toAddress, response.MessageId);
+
+            return new EmailResult
+            {
+                Success = true,
+                RequestId = Guid.NewGuid().ToString(),
+                MessageId = response.MessageId,
+                Status = EmailStatus.Sent,
+                Timestamp = DateTime.UtcNow
+            };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to send email {RequestId}", request.Id);
-            return Error.Failure($"Email send failed: {ex.Message}");
+            _logger.LogError(ex, "Failed to send email to {ToAddress}", toAddress);
+            return Error.Failure(ex.Message);
         }
     }
 
@@ -95,337 +101,102 @@ public sealed class SesV2EmailSender : IEnhancedEmailService
         string toAddress,
         string templateName,
         Dictionary<string, object> templateData,
-        string? configurationSet = null,
         List<string>? cc = null,
         List<string>? bcc = null,
-        string? replyTo = null,
-        Dictionary<string, string>? tags = null,
-        CancellationToken cancellationToken = default)
-    {
-        var request = EmailRequest.FromTemplate(
-            to: toAddress,
-            templateName: templateName,
-            templateData: templateData,
-            cc: cc,
-            bcc: bcc,
-            replyTo: replyTo,
-            tags: tags,
-            configurationSet: configurationSet);
-
-        return await SendEmailAsync(request, cancellationToken);
-    }
-
-    public async Task<ErrorOr<BulkEmailResult>> SendBulkEmailAsync(
-        BulkEmailRequest request, 
         CancellationToken cancellationToken = default)
     {
         try
         {
-            var startTime = DateTime.UtcNow;
-            var allResults = new List<DevOpsMcp.Domain.Email.BulkEmailEntryResult>();
-
-            // Process in batches
-            var batches = CreateBatches(request.Destinations, _options.MaxBulkSize);
-            
-            foreach (var batch in batches)
+            var request = new SendEmailRequest
             {
-                var batchResults = await SendBulkBatchAsync(request, batch, cancellationToken);
-                allResults.AddRange(batchResults);
+                FromEmailAddress = FormatFromAddress(),
+                Destination = new Destination
+                {
+                    ToAddresses = new List<string> { toAddress },
+                    CcAddresses = cc ?? new List<string>(),
+                    BccAddresses = bcc ?? new List<string>()
+                },
+                Content = new EmailContent
+                {
+                    Template = new Template
+                    {
+                        TemplateName = templateName,
+                        TemplateData = JsonSerializer.Serialize(templateData)
+                    }
+                }
+            };
+
+            // Add configuration set if configured
+            if (!string.IsNullOrEmpty(_options.DefaultConfigurationSet))
+            {
+                request.ConfigurationSetName = _options.DefaultConfigurationSet;
             }
 
-            return new BulkEmailResult
-            {
-                RequestId = request.Id,
-                SuccessCount = allResults.Count(r => r.Success),
-                FailureCount = allResults.Count(r => !r.Success),
-                Results = allResults,
-                Duration = DateTime.UtcNow - startTime
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to send bulk email {RequestId}", request.Id);
-            return Error.Failure($"Bulk email send failed: {ex.Message}");
-        }
-    }
+            var response = await _sesClient.SendEmailAsync(request, cancellationToken);
 
-    public async Task<ErrorOr<EmailStatus>> GetEmailStatusAsync(
-        string messageId,
-        CancellationToken cancellationToken = default)
-    {
-        var cacheKey = $"email_status_{messageId}";
-        if (_cache.TryGetValue<EmailStatus>(cacheKey, out var cachedStatus))
-        {
-            return cachedStatus;
-        }
-
-        // In a full implementation, this would query event data
-        return EmailStatus.Sent;
-    }
-
-    public async Task<ErrorOr<DevOpsMcp.Domain.Interfaces.ValidationResult>> ValidateEmailAsync(
-        EmailRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        var policy = GetSecurityPolicy(_emailOptions.DefaultSecurityPolicy);
-        var result = await ValidateRequestAsync(request, policy, cancellationToken);
-        
-        if (result.IsError)
-        {
-            return new DevOpsMcp.Domain.Interfaces.ValidationResult
-            {
-                IsValid = false,
-                Errors = result.Errors.Select(e => e.Description).ToList()
-            };
-        }
-
-        return new DevOpsMcp.Domain.Interfaces.ValidationResult
-        {
-            IsValid = true,
-            Errors = new List<string>()
-        };
-    }
-
-    private async Task<EmailResult> SendEmailInternalAsync(
-        EmailRequest request,
-        CancellationToken cancellationToken)
-    {
-        var startTime = DateTime.UtcNow;
-        
-        try
-        {
-            var sendRequest = _requestBuilder.Build(request);
-            var response = await _sesClient.SendEmailAsync(sendRequest, cancellationToken);
-            
-            _logger.LogInformation(
-                "Email sent successfully. RequestId: {RequestId}, MessageId: {MessageId}", 
-                request.Id, response.MessageId);
+            _logger.LogInformation("Templated email sent successfully to {ToAddress} using template {TemplateName}. MessageId: {MessageId}", 
+                toAddress, templateName, response.MessageId);
 
             return new EmailResult
             {
                 Success = true,
-                RequestId = request.Id,
+                RequestId = Guid.NewGuid().ToString(),
                 MessageId = response.MessageId,
                 Status = EmailStatus.Sent,
-                Duration = DateTime.UtcNow - startTime,
-                Metadata = new Dictionary<string, string>
-                {
-                    ["HttpStatusCode"] = response.HttpStatusCode.ToString()
-                }
+                Timestamp = DateTime.UtcNow
             };
         }
         catch (Exception ex)
         {
-            var error = MapExceptionToError(ex);
-            
-            return new EmailResult
-            {
-                Success = false,
-                RequestId = request.Id,
-                Error = error.Message,
-                Status = EmailStatus.Failed,
-                Duration = DateTime.UtcNow - startTime,
-                IsTransient = error.IsTransient
-            };
+            _logger.LogError(ex, "Failed to send templated email to {ToAddress} using template {TemplateName}", 
+                toAddress, templateName);
+            return Error.Failure($"Failed to send templated email: {ex.Message}");
         }
     }
 
-    private async Task<List<DevOpsMcp.Domain.Email.BulkEmailEntryResult>> SendBulkBatchAsync(
-        BulkEmailRequest request,
-        List<BulkEmailDestination> batch,
-        CancellationToken cancellationToken)
+    public async Task<ErrorOr<List<EmailResult>>> SendTeamEmailAsync(
+        List<string> teamEmails,
+        string subject,
+        string body,
+        bool isHtml = true,
+        CancellationToken cancellationToken = default)
     {
-        var bulkRequest = BuildBulkEmailRequest(request, batch);
-        var response = await _sesClient.SendBulkEmailAsync(bulkRequest, cancellationToken);
+        var results = new List<EmailResult>();
+        var errors = new List<Error>();
 
-        var results = new List<DevOpsMcp.Domain.Email.BulkEmailEntryResult>();
-        
-        for (int i = 0; i < response.BulkEmailEntryResults.Count; i++)
+        // Send individual emails to each team member
+        // AWS SES handles rate limiting automatically
+        foreach (var email in teamEmails)
         {
-            var entryResult = response.BulkEmailEntryResults[i];
-            var destination = batch[i];
-
-            results.Add(new DevOpsMcp.Domain.Email.BulkEmailEntryResult
+            var result = await SendEmailAsync(email, subject, body, isHtml, 
+                cancellationToken: cancellationToken);
+            
+            if (result.IsError)
             {
-                Email = destination.Email,
-                Success = entryResult.Status == BulkEmailStatus.SUCCESS,
-                MessageId = entryResult.MessageId,
-                Error = entryResult.Error,
-                Status = entryResult.Status.ToString()
-            });
+                errors.AddRange(result.Errors);
+                _logger.LogWarning("Failed to send team email to {Email}", email);
+            }
+            else
+            {
+                results.Add(result.Value);
+            }
         }
+
+        if (results.Count == 0 && errors.Count > 0)
+        {
+            return errors;
+        }
+
+        _logger.LogInformation("Team email sent to {SuccessCount}/{TotalCount} recipients", 
+            results.Count, teamEmails.Count);
 
         return results;
     }
 
-    private SendBulkEmailRequest BuildBulkEmailRequest(
-        BulkEmailRequest request, 
-        List<BulkEmailDestination> batch)
+    private string FormatFromAddress()
     {
-        return new SendBulkEmailRequest
-        {
-            FromEmailAddress = FormatAddress(_options.FromAddress, _options.FromName),
-            DefaultContent = new BulkEmailContent
-            {
-                Template = new Template
-                {
-                    TemplateName = request.TemplateName,
-                    TemplateData = JsonSerializer.Serialize(request.DefaultTemplateData)
-                }
-            },
-            BulkEmailEntries = batch.Select(dest => 
-            {
-                var entry = new BulkEmailEntry
-                {
-                    Destination = new Destination
-                    {
-                        ToAddresses = new List<string> { dest.Email }
-                    },
-                    ReplacementTags = request.Tags
-                        .Select(kvp => new MessageTag { Name = kvp.Key, Value = kvp.Value })
-                        .ToList()
-                };
-                
-                // Note: AWS SES V2 doesn't support per-recipient template data in bulk sends
-                // All recipients in a bulk send use the same template data
-                // For per-recipient customization, use multiple SendEmailAsync calls instead
-                
-                return entry;
-            }).ToList(),
-            ConfigurationSetName = request.ConfigurationSet ?? _options.DefaultConfigurationSet,
-            ReplyToAddresses = request.ReplyToAddresses.Any() 
-                ? request.ReplyToAddresses.ToList() 
-                : _options.ReplyToAddresses
-        };
-    }
-
-    private async Task<ErrorOr<bool>> ValidateRequestAsync(
-        EmailRequest request,
-        EmailSecurityPolicy policy,
-        CancellationToken cancellationToken)
-    {
-        var validationResult = policy.ValidateRequest(request);
-        if (!validationResult.IsValid)
-        {
-            _logger.LogWarning(
-                "Email request {RequestId} failed validation: {Errors}", 
-                request.Id, 
-                string.Join(", ", validationResult.Errors));
-                
-            return Error.Validation($"Email validation failed: {string.Join(", ", validationResult.Errors)}");
-        }
-
-        // Additional async validations could go here (e.g., checking suppression list)
-        await Task.CompletedTask;
-        
-        return true;
-    }
-
-    private IAsyncPolicy<EmailResult> CreateResiliencePolicy()
-    {
-        var retryPolicy = Policy
-            .HandleResult<EmailResult>(r => !r.Success && r.IsTransient)
-            .Or<TooManyRequestsException>()
-            .Or<SendingPausedException>()
-            .WaitAndRetryAsync(
-                _emailOptions.MaxRetryAttempts,
-                retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
-                onRetry: (outcome, timespan, retryCount, context) =>
-                {
-                    _logger.LogWarning(
-                        "Retry {RetryCount} after {Delay}s for email request", 
-                        retryCount, 
-                        timespan.TotalSeconds);
-                });
-
-        var circuitBreakerPolicy = Policy
-            .HandleResult<EmailResult>(r => !r.Success)
-            .CircuitBreakerAsync(
-                _emailOptions.CircuitBreakerThreshold,
-                TimeSpan.FromSeconds(_emailOptions.CircuitBreakerDurationSeconds),
-                onBreak: (result, duration) => 
-                {
-                    _logger.LogError("Email service circuit breaker opened for {Duration}", duration);
-                },
-                onReset: () => 
-                {
-                    _logger.LogInformation("Email service circuit breaker reset");
-                });
-
-        var timeoutPolicy = Policy
-            .TimeoutAsync<EmailResult>(_options.TimeoutSeconds);
-
-        var fallbackPolicy = Policy<EmailResult>
-            .Handle<BrokenCircuitException>()
-            .FallbackAsync(
-                new EmailResult 
-                { 
-                    Success = false, 
-                    RequestId = string.Empty,
-                    Error = "Email service temporarily unavailable",
-                    Status = EmailStatus.Failed,
-                    IsTransient = true
-                });
-
-        return Policy.WrapAsync(fallbackPolicy, circuitBreakerPolicy, retryPolicy, timeoutPolicy);
-    }
-
-    private static List<List<T>> CreateBatches<T>(IReadOnlyList<T> items, int batchSize)
-    {
-        var batches = new List<List<T>>();
-        
-        for (int i = 0; i < items.Count; i += batchSize)
-        {
-            var batch = items.Skip(i).Take(batchSize).ToList();
-            batches.Add(batch);
-        }
-        
-        return batches;
-    }
-
-    private (string Message, bool IsTransient) MapExceptionToError(Exception ex)
-    {
-        return ex switch
-        {
-            AccountSuspendedException => ("AWS account suspended", false),
-            MailFromDomainNotVerifiedException => ("From domain not verified", false),
-            MessageRejectedException msgEx => ($"Email rejected: {msgEx.Message}", false),
-            SendingPausedException => ("Sending temporarily paused", true),
-            TooManyRequestsException => ("Rate limit exceeded", true),
-            AmazonSimpleEmailServiceV2Exception sesEx when IsTransientError(sesEx) => (sesEx.Message, true),
-            _ => (ex.Message, false)
-        };
-    }
-
-    private static bool IsTransientError(AmazonSimpleEmailServiceV2Exception ex)
-    {
-        return ex.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable ||
-               ex.StatusCode == System.Net.HttpStatusCode.TooManyRequests ||
-               ex.StatusCode == System.Net.HttpStatusCode.RequestTimeout;
-    }
-
-    private EmailSecurityPolicy GetSecurityPolicy(string policyName)
-    {
-        return policyName?.ToLowerInvariant() switch
-        {
-            "development" => EmailSecurityPolicy.Development,
-            "standard" => EmailSecurityPolicy.Standard,
-            "restricted" => EmailSecurityPolicy.Restricted,
-            _ => EmailSecurityPolicy.Standard
-        };
-    }
-
-    private async Task CacheEmailStatusAsync(string messageId, EmailStatus status)
-    {
-        var cacheKey = $"email_status_{messageId}";
-        _cache.Set(cacheKey, status, TimeSpan.FromMinutes(60));
-        await Task.CompletedTask;
-    }
-
-    private static string FormatAddress(string email, string? name)
-    {
-        return string.IsNullOrEmpty(name) 
-            ? email 
-            : $"\"{name}\" <{email}>";
+        return string.IsNullOrEmpty(_options.FromName) 
+            ? _options.FromAddress 
+            : $"\"{_options.FromName}\" <{_options.FromAddress}>";
     }
 }

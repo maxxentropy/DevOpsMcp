@@ -3,13 +3,10 @@ using System.ComponentModel;
 namespace DevOpsMcp.Server.Tools.Email;
 
 /// <summary>
-/// Arguments for sending email
+/// Arguments for sending team email
 /// </summary>
-public sealed class SendEmailToolArguments
+public sealed class SendTeamEmailToolArguments
 {
-    [Description("Recipient email address")]
-    public required string To { get; init; }
-
     [Description("Email subject line")]
     public required string Subject { get; init; }
 
@@ -18,10 +15,4 @@ public sealed class SendEmailToolArguments
 
     [Description("Whether the body is HTML content (default: true)")]
     public bool? IsHtml { get; init; }
-
-    [Description("CC recipients (optional)")]
-    public List<string>? Cc { get; init; }
-
-    [Description("BCC recipients (optional)")]
-    public List<string>? Bcc { get; init; }
 }

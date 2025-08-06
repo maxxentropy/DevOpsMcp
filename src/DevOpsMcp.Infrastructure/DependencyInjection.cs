@@ -1,7 +1,6 @@
 using System;
-using System.IO;
-using Amazon.SimpleEmail;
 using Amazon.SimpleEmailV2;
+using Amazon.Extensions.NETCore.Setup;
 using DevOpsMcp.Application.Personas.Memory;
 using DevOpsMcp.Domain.Interfaces;
 using DevOpsMcp.Infrastructure.Authentication;
@@ -16,9 +15,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Polly;
-using Polly.Extensions.Http;
-using System.Net.Http;
 
 namespace DevOpsMcp.Infrastructure;
 
@@ -29,8 +25,6 @@ public static class DependencyInjection
         // Configuration
         services.Configure<AzureDevOpsOptions>(configuration.GetSection(AzureDevOpsOptions.SectionName));
         services.Configure<EagleOptions>(configuration.GetSection(EagleOptions.SectionName));
-        services.Configure<EmailOptions>(configuration.GetSection(EmailOptions.SectionName));
-        services.Configure<AwsSesOptions>(configuration.GetSection(AwsSesOptions.SectionName));
         services.Configure<SesV2Options>(configuration.GetSection(SesV2Options.SectionName));
         
         // Azure DevOps Client Factory - Use factory delegate to ensure proper configuration binding
@@ -84,94 +78,22 @@ public static class DependencyInjection
         services.AddSingleton<IExecutionHistoryStore, ExecutionHistoryStore>();
         services.AddSingleton<IEagleScriptExecutor, EagleScriptExecutor>();
         
-        // Email Services
-        services.AddSingleton<IEmailTemplateRenderer, RazorEmailTemplateRenderer>();
-        
-        // AWS SES V1 Client (for backward compatibility)
-        services.AddSingleton<IAmazonSimpleEmailService>(provider =>
-        {
-            var options = provider.GetRequiredService<IOptions<AwsSesOptions>>();
-            var config = new AmazonSimpleEmailServiceConfig
-            {
-                RegionEndpoint = Amazon.RegionEndpoint.GetBySystemName(options.Value.Region)
-            };
-            
-            return new AmazonSimpleEmailServiceClient(config);
-        });
-        
         // AWS SES V2 Client
         services.AddSingleton<IAmazonSimpleEmailServiceV2>(provider =>
         {
-            var options = provider.GetRequiredService<IOptions<SesV2Options>>();
-            var config = new AmazonSimpleEmailServiceV2Config
-            {
-                RegionEndpoint = Amazon.RegionEndpoint.GetBySystemName(options.Value.Region)
-            };
+            var awsOptions = configuration.GetAWSOptions();
             
-            return new AmazonSimpleEmailServiceV2Client(config);
+            // Use AWS SDK's default credential and region resolution
+            // This supports IAM roles, environment variables, AWS profiles, etc.
+            return awsOptions.CreateServiceClient<IAmazonSimpleEmailServiceV2>();
         });
         
-        // Register V1 service
-        services.AddSingleton<SesEmailService>();
-        
-        // Register V2 service
+        // Register email services
         services.AddSingleton<SesV2EmailSender>();
-        services.AddSingleton<IEnhancedEmailService>(provider => provider.GetRequiredService<SesV2EmailSender>());
-        
-        // Register IEmailService based on feature flag
-        services.AddSingleton<IEmailService>(provider =>
-        {
-            var v2Options = provider.GetRequiredService<IOptions<SesV2Options>>();
-            if (v2Options.Value.Enabled)
-            {
-                var logger = provider.GetRequiredService<ILogger<SesV2EmailSender>>();
-                logger.LogInformation("Using AWS SES V2 email service");
-                return provider.GetRequiredService<SesV2EmailSender>();
-            }
-            else
-            {
-                var logger = provider.GetRequiredService<ILogger<SesEmailService>>();
-                logger.LogInformation("Using AWS SES V1 email service");
-                return provider.GetRequiredService<SesEmailService>();
-            }
-        });
-        
-        // Memory cache for templates
-        services.AddMemoryCache();
+        services.AddSingleton<IEmailService>(provider => provider.GetRequiredService<SesV2EmailSender>());
+        services.AddSingleton<SesV2AccountService>();
+        services.AddSingleton<IEmailAccountService>(provider => provider.GetRequiredService<SesV2AccountService>());
         
         return services;
-    }
-    
-    private static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
-    {
-        return HttpPolicyExtensions
-            .HandleTransientHttpError()
-            .WaitAndRetryAsync(
-                3,
-                retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
-                onRetry: (outcome, timespan, retryCount, context) =>
-                {
-                    var logger = context.TryGetValue("logger", out var loggerValue) ? loggerValue as ILogger : null;
-                    logger?.LogWarning("Delaying for {delay}ms, then making retry {retry}.", timespan.TotalMilliseconds, retryCount);
-                });
-    }
-    
-    private static IAsyncPolicy<HttpResponseMessage> GetCircuitBreakerPolicy()
-    {
-        return HttpPolicyExtensions
-            .HandleTransientHttpError()
-            .CircuitBreakerAsync(
-                handledEventsAllowedBeforeBreaking: 5,
-                durationOfBreak: TimeSpan.FromSeconds(30),
-                onBreak: (result, timespan, context) =>
-                {
-                    var logger = context.TryGetValue("logger", out var loggerValue) ? loggerValue as ILogger : null;
-                    logger?.LogWarning("Circuit breaker opened for {duration}s", timespan.TotalSeconds);
-                },
-                onReset: context =>
-                {
-                    var logger = context.TryGetValue("logger", out var loggerValue) ? loggerValue as ILogger : null;
-                    logger?.LogInformation("Circuit breaker reset");
-                });
     }
 }

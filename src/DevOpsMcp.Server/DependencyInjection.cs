@@ -48,7 +48,10 @@ public static class DependencyInjection
         
         // Email Tools
         services.AddTransient<SendEmailTool>();
-        services.AddTransient<PreviewEmailTool>();
+        services.AddTransient<SendTemplatedEmailTool>();
+        services.AddTransient<SendTeamEmailTool>();
+        services.AddTransient<GetSendQuotaTool>();
+        services.AddTransient<GetSendStatisticsTool>();
         
         // Register tools with the registry
         services.AddHostedService<ToolRegistrationService>();
@@ -91,7 +94,10 @@ internal sealed class ToolRegistrationService(
         
         // Email tools
         toolRegistry.RegisterTool(serviceProvider.GetRequiredService<SendEmailTool>());
-        toolRegistry.RegisterTool(serviceProvider.GetRequiredService<PreviewEmailTool>());
+        toolRegistry.RegisterTool(serviceProvider.GetRequiredService<SendTemplatedEmailTool>());
+        toolRegistry.RegisterTool(serviceProvider.GetRequiredService<SendTeamEmailTool>());
+        toolRegistry.RegisterTool(serviceProvider.GetRequiredService<GetSendQuotaTool>());
+        toolRegistry.RegisterTool(serviceProvider.GetRequiredService<GetSendStatisticsTool>());
         
         logger.LogInformation("Tool registration completed");
         

@@ -6,27 +6,40 @@ using ErrorOr;
 namespace DevOpsMcp.Domain.Interfaces;
 
 /// <summary>
-/// Service for sending emails
+/// Service for sending emails through AWS SES
 /// </summary>
 public interface IEmailService
 {
     /// <summary>
-    /// Send an email using the specified request
+    /// Send an email (HTML or text)
     /// </summary>
-    Task<ErrorOr<EmailResult>> SendEmailAsync(EmailRequest request, CancellationToken cancellationToken = default);
+    Task<ErrorOr<EmailResult>> SendEmailAsync(
+        string toAddress, 
+        string subject, 
+        string body, 
+        bool isHtml = true,
+        List<string>? cc = null,
+        List<string>? bcc = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Send an email with a specific security policy
+    /// Send a templated email using AWS SES template
     /// </summary>
-    Task<ErrorOr<EmailResult>> SendEmailAsync(EmailRequest request, EmailSecurityPolicy policy, CancellationToken cancellationToken = default);
+    Task<ErrorOr<EmailResult>> SendTemplatedEmailAsync(
+        string toAddress,
+        string templateName,
+        Dictionary<string, object> templateData,
+        List<string>? cc = null,
+        List<string>? bcc = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Get the status of a previously sent email
+    /// Send email to multiple team members
     /// </summary>
-    Task<ErrorOr<EmailStatus>> GetEmailStatusAsync(string messageId, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Validate an email request without sending
-    /// </summary>
-    Task<ErrorOr<ValidationResult>> ValidateEmailAsync(EmailRequest request, CancellationToken cancellationToken = default);
+    Task<ErrorOr<List<EmailResult>>> SendTeamEmailAsync(
+        List<string> teamEmails,
+        string subject,
+        string body,
+        bool isHtml = true,
+        CancellationToken cancellationToken = default);
 }

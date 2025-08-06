@@ -1,0 +1,2 @@
+data: {"jsonrpc":"2.0","result":{"content":[{"type":"text","text":"{\u0022success\u0022:true,\u0022sendingEnabled\u0022:true,\u0022productionAccessEnabled\u0022:false,\u0022enforcementStatus\u0022:\u0022HEALTHY\u0022,\u0022details\u0022:{\u0022value\u0022:\u0022EN\u0022},\u0022suppressionAttributes\u0022:{\u0022suppressedReasons\u0022:[\u0022BOUNCE\u0022,\u0022COMPLAINT\u0022]},\u0022vdmAttributes\u0022:null}","mimeType":null,"data":null}],"isError":false},"id":2}
+
