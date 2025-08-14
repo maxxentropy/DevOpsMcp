@@ -14,7 +14,7 @@
     <PackageReference Include="Microsoft.VisualStudio.Services.Release.Client" Version="19.225.1" />
     <PackageReference Include="Polly.Extensions.Http" Version="3.0.0" />
     <PackageReference Include="Azure.Identity" Version="1.11.4" />
-    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="7.2.0" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="7.5.1" />
     <PackageReference Include="Eagle" Version="1.0.8734.30319" />
     <PackageReference Include="YamlDotNet" Version="15.1.6" />
     <!-- AWS SES and Email packages -->
@@ -26,6 +26,15 @@
     <PackageReference Include="MimeKit" Version="4.8.0" />
     <PackageReference Include="Polly" Version="8.2.1" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.0" />
+    <!-- PostgreSQL and Supabase packages for Archon integration -->
+    <PackageReference Include="Npgsql" Version="8.0.5" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.10" />
+    <PackageReference Include="Npgsql.Json.NET" Version="8.0.5" />
+    <PackageReference Include="pgvector" Version="0.3.1" />
+    <PackageReference Include="Pgvector.EntityFrameworkCore" Version="0.2.2" />
+    <PackageReference Include="Supabase" Version="1.1.1" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.11" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.11" />
   </ItemGroup>
 
   <ItemGroup>

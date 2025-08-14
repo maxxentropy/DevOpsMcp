@@ -107,7 +107,7 @@ public class SiteReliabilityEngineerPersonaTests
     public async Task CalculateRoleAlignmentAsync_WithReliabilityTask_ReturnsHighScore()
     {
         // Arrange
-        var task = new DevOpsTask
+        var task = new Domain.Personas.DevOpsTask
         {
             Title = "Incident Response",
             Description = "Production incident requiring immediate response",
@@ -128,7 +128,7 @@ public class SiteReliabilityEngineerPersonaTests
     public async Task CalculateRoleAlignmentAsync_WithSecurityTask_ReturnsLowerScore()
     {
         // Arrange
-        var task = new DevOpsTask
+        var task = new Domain.Personas.DevOpsTask
         {
             Title = "Security Audit",
             Description = "Perform security audit",

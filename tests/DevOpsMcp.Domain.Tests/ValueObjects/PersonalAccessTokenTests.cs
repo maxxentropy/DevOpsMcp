@@ -1,6 +1,6 @@
 namespace DevOpsMcp.Domain.Tests.ValueObjects;
 
-public class PersonalAccessTokenTests
+public sealed class PersonalAccessTokenTests
 {
     [Fact]
     public void Create_ValidToken_ReturnsSuccess()

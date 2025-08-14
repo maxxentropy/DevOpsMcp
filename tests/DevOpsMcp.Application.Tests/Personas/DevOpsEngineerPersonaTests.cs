@@ -56,7 +56,7 @@ public class DevOpsEngineerPersonaTests
     public async Task CalculateRoleAlignmentAsync_ReturnsExpectedScores(string taskDescription, double minExpectedScore)
     {
         // Arrange
-        var task = new DevOpsTask
+        var task = new Domain.Personas.DevOpsTask
         {
             Description = taskDescription,
             Category = TaskCategory.Deployment

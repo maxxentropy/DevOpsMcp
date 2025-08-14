@@ -112,7 +112,7 @@ public class EngineeringManagerPersonaTests
     public async Task CalculateRoleAlignmentAsync_WithManagementTask_ReturnsHighScore()
     {
         // Arrange
-        var task = new DevOpsTask
+        var task = new Domain.Personas.DevOpsTask
         {
             Title = "Team Planning",
             Description = "Quarterly planning for the team",
@@ -133,7 +133,7 @@ public class EngineeringManagerPersonaTests
     public async Task CalculateRoleAlignmentAsync_WithCodingTask_ReturnsLowerScore()
     {
         // Arrange
-        var task = new DevOpsTask
+        var task = new Domain.Personas.DevOpsTask
         {
             Title = "Code Implementation",
             Description = "Implement new feature",

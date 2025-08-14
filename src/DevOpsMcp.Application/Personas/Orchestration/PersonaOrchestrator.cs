@@ -321,7 +321,7 @@ public class PersonaOrchestrator : IPersonaOrchestrator
                 scoreTasks.Add(Task.Run(async () =>
                 {
                     // Create a simple task to calculate alignment
-                    var task = new DevOpsTask
+                    var task = new Domain.Personas.DevOpsTask
                     {
                         Description = request,
                         Category = InferTaskCategory(request),

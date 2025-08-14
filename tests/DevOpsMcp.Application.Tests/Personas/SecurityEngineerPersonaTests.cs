@@ -112,7 +112,7 @@ public class SecurityEngineerPersonaTests
     public async Task CalculateRoleAlignmentAsync_WithSecurityTask_ReturnsHighScore()
     {
         // Arrange
-        var task = new DevOpsTask
+        var task = new Domain.Personas.DevOpsTask
         {
             Title = "Security Scan",
             Description = "Critical infrastructure security scan",
@@ -133,7 +133,7 @@ public class SecurityEngineerPersonaTests
     public async Task CalculateRoleAlignmentAsync_WithUITask_ReturnsLowScore()
     {
         // Arrange
-        var task = new DevOpsTask
+        var task = new Domain.Personas.DevOpsTask
         {
             Title = "UI Design",
             Description = "Design user interface",

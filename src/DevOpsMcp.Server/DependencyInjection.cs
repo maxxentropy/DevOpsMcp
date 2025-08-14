@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Configuration;
 using DevOpsMcp.Server.Mcp;
 using DevOpsMcp.Server.Protocols;
 using DevOpsMcp.Server.Tools;
@@ -8,6 +9,8 @@ using DevOpsMcp.Server.Tools.WorkItems;
 using DevOpsMcp.Server.Tools.Personas;
 using DevOpsMcp.Server.Tools.Eagle;
 using DevOpsMcp.Server.Tools.Email;
+using DevOpsMcp.Server.Tools.Enhanced;
+using DevOpsMcp.Infrastructure.Configuration;
 
 namespace DevOpsMcp.Server;
 
@@ -53,6 +56,13 @@ public static class DependencyInjection
         services.AddTransient<GetSendQuotaTool>();
         services.AddTransient<GetSendStatisticsTool>();
         
+        // Enhanced Feature Tools
+        services.AddTransient<CreateTaskTool>();
+        services.AddTransient<ListTasksTool>();
+        services.AddTransient<UpdateTaskTool>();
+        services.AddTransient<ManageProjectTool>();
+        services.AddTransient<SearchKnowledgeTool>();
+        
         // Register tools with the registry
         services.AddHostedService<ToolRegistrationService>();
         
@@ -63,6 +73,7 @@ public static class DependencyInjection
 internal sealed class ToolRegistrationService(
     IToolRegistry toolRegistry,
     IServiceProvider serviceProvider,
+    IConfiguration configuration,
     ILogger<ToolRegistrationService> logger)
     : IHostedService
 {
@@ -98,6 +109,21 @@ internal sealed class ToolRegistrationService(
         toolRegistry.RegisterTool(serviceProvider.GetRequiredService<SendTeamEmailTool>());
         toolRegistry.RegisterTool(serviceProvider.GetRequiredService<GetSendQuotaTool>());
         toolRegistry.RegisterTool(serviceProvider.GetRequiredService<GetSendStatisticsTool>());
+        
+        // Enhanced Feature tools - Only register if configured
+        var enhancedOptions = configuration
+            .GetSection(EnhancedFeaturesOptions.SectionName)
+            .Get<EnhancedFeaturesOptions>();
+            
+        if (!string.IsNullOrEmpty(enhancedOptions?.DatabaseUrl))
+        {
+            logger.LogInformation("Registering Enhanced Feature tools");
+            toolRegistry.RegisterTool(serviceProvider.GetRequiredService<CreateTaskTool>());
+            toolRegistry.RegisterTool(serviceProvider.GetRequiredService<ListTasksTool>());
+            toolRegistry.RegisterTool(serviceProvider.GetRequiredService<UpdateTaskTool>());
+            toolRegistry.RegisterTool(serviceProvider.GetRequiredService<ManageProjectTool>());
+            toolRegistry.RegisterTool(serviceProvider.GetRequiredService<SearchKnowledgeTool>());
+        }
         
         logger.LogInformation("Tool registration completed");
         

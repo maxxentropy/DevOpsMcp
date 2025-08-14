@@ -1,6 +1,6 @@
 namespace DevOpsMcp.Domain.Tests.ValueObjects;
 
-public class OrganizationUrlTests
+public sealed class OrganizationUrlTests
 {
     [Theory]
     [InlineData("https://dev.azure.com/myorg")]

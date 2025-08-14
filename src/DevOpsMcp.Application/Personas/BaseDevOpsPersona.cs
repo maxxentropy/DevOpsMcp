@@ -64,7 +64,7 @@ public abstract class BaseDevOpsPersona : IDevOpsPersona
         }
     }
 
-    public virtual async Task<double> CalculateRoleAlignmentAsync(DevOpsTask task)
+    public virtual async Task<double> CalculateRoleAlignmentAsync(Domain.Personas.DevOpsTask task)
     {
         var score = 0.0;
         var weights = GetAlignmentWeights();
@@ -244,7 +244,7 @@ public abstract class BaseDevOpsPersona : IDevOpsPersona
         return complexity <= maxComplexity ? 1.0 : 0.5;
     }
 
-    protected virtual double CalculateSpecializationAlignment(DevOpsTask task)
+    protected virtual double CalculateSpecializationAlignment(Domain.Personas.DevOpsTask task)
     {
         // Override in specific personas
         return 0.5;

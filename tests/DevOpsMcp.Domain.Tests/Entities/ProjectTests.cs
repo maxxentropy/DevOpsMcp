@@ -1,6 +1,6 @@
 namespace DevOpsMcp.Domain.Tests.Entities;
 
-public class ProjectTests
+public sealed class ProjectTests
 {
     private readonly Faker _faker = new();
 

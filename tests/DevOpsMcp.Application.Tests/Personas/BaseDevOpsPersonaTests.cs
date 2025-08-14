@@ -56,7 +56,7 @@ public class BaseDevOpsPersonaTests
     public async Task CalculateRoleAlignmentAsync_WithAlignedTask_ReturnsHighScore()
     {
         // Arrange
-        var task = new DevOpsTask
+        var task = new Domain.Personas.DevOpsTask
         {
             Category = TaskCategory.Automation,
             Complexity = TaskComplexity.Moderate,
@@ -74,7 +74,7 @@ public class BaseDevOpsPersonaTests
     public async Task CalculateRoleAlignmentAsync_WithMisalignedTask_ReturnsLowScore()
     {
         // Arrange
-        var task = new DevOpsTask
+        var task = new Domain.Personas.DevOpsTask
         {
             Category = TaskCategory.Security,
             Complexity = TaskComplexity.Expert,
@@ -291,7 +291,7 @@ public class BaseDevOpsPersonaTests
             return new List<string> { "development", "testing", "ci/cd" };
         }
 
-        protected override double CalculateSpecializationAlignment(DevOpsTask task)
+        protected override double CalculateSpecializationAlignment(Domain.Personas.DevOpsTask task)
         {
             return task.Category == TaskCategory.Automation ? 0.9 : 0.3;
         }
